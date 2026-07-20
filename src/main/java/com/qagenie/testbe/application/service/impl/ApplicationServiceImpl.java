@@ -20,6 +20,7 @@ import com.qagenie.testbe.scenario.repository.TestScenarioRepository;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -48,6 +49,9 @@ public class ApplicationServiceImpl implements ApplicationService {
     private final TestScenarioRepository scenarioRepository;
     private final SpecFetchService specFetchService;
     private final SpecDiffService specDiffService;
+
+    @Value("${qagenie.spec.swagger-suffix}")
+    private String defaultSwaggerSuffix;
 
     // ---------------------------------------------------------------- CRUD
 
@@ -144,23 +148,48 @@ public class ApplicationServiceImpl implements ApplicationService {
         return resolveEffectiveSpecUrl(app);
     }
 
+    private static final String CONFIG_TYPE_SWAGGER_URL = "SwaggerUrl";
+    private static final String ENV_NAME_UAT = "UAT";
+    private static final String ENV_NAME_DEV = "DEV";
+
     private String resolveEffectiveSpecUrl(Application app) {
-        if ("CUSTOM".equals(app.getSpecSourceMode())) {
-            if (app.getSpecSourceUrl() == null || app.getSpecSourceUrl().isBlank()) {
-                throw new BusinessException("Application is set to CUSTOM spec source but has no specSourceUrl", "CUSTOM_URL_MISSING");
-            }
-            return app.getSpecSourceUrl();
-        }
-        // DERIVED
-        if (app.getReferenceEnvironment() == null) {
-            throw new BusinessException("Application is set to DERIVED spec source but has no reference environment", "REFERENCE_ENV_MISSING");
-        }
-        String base = app.getReferenceEnvironment().getBaseUrl();
+        Project project = app.getProject();
+        EnvironmentConfig swaggerEnv = resolveSwaggerEnvironment(project.getId());
+
+        String base = swaggerEnv.getBaseUrl();
         if (base.endsWith("/")) {
             base = base.substring(0, base.length() - 1);
         }
-        String suffix = app.getProject().getSpecPathSuffix() == null ? "" : app.getProject().getSpecPathSuffix();
-        return base + "/" + app.getName() + suffix;
+
+        String suffix = project.getSpecPathSuffix() == null || project.getSpecPathSuffix().isBlank()
+                ? defaultSwaggerSuffix
+                : project.getSpecPathSuffix();
+        if (!suffix.startsWith("/")) {
+            suffix = "/" + suffix;
+        }
+
+        return base + "/" + app.getName().toLowerCase() + suffix;
+    }
+
+    /**
+     * UAT takes priority over DEV when both have a SwaggerUrl config entry
+     * for the project; falls back to DEV if UAT isn't configured.
+     */
+    private EnvironmentConfig resolveSwaggerEnvironment(Long projectId) {
+        List<EnvironmentConfig> swaggerConfigs = environmentConfigRepository.findByProjectId(projectId).stream()
+                .filter(EnvironmentConfig::isActive)
+                .filter(e -> CONFIG_TYPE_SWAGGER_URL.equalsIgnoreCase(e.getConfigType()))
+                .toList();
+
+        return swaggerConfigs.stream()
+                .filter(e -> ENV_NAME_UAT.equalsIgnoreCase(e.getEnvName()))
+                .findFirst()
+                .or(() -> swaggerConfigs.stream()
+                        .filter(e -> ENV_NAME_DEV.equalsIgnoreCase(e.getEnvName()))
+                        .findFirst())
+                .orElseThrow(() -> new BusinessException(
+                        "No active SwaggerUrl environment config found for project id=" + projectId + " (checked UAT, then DEV)",
+                        "SWAGGER_ENV_NOT_FOUND"));
     }
 
     // ------------------------------------------------------------- Spec ingestion (versioned)
