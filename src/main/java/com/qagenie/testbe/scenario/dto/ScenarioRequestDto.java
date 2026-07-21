@@ -16,6 +16,6 @@ public record ScenarioRequestDto(
         @NotNull ScenarioType scenarioType,
         @NotNull ScenarioSource source,
         RiskLevel riskLevel,
-        String description,
-        Boolean active
+        Boolean active,
+        ApiTestData apiTestData
 ) {}
