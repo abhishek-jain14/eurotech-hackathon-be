@@ -30,7 +30,7 @@ public class GherkinGenerator {
                 ? endpoint.getSummary()
                 : endpoint.getHttpMethod() + " request to " + endpoint.getPath();
 
-        gherkin.append("Scenario: ").append(scenarioTitle).append("\n");
+        gherkin.append("Scenario Outline: ").append(scenarioTitle).append("\n");
 
         // 2. Base Endpoint Path
         gherkin.append("  Given the API endpoint is \"").append(endpoint.getPath()).append("\"\n");
