@@ -1,6 +1,7 @@
 package com.qagenie.testbe.changetracker.service;
 
 import com.qagenie.testbe.application.dto.ApplicationResponseDto;
+import com.qagenie.testbe.application.dto.SpecFetchResultDto;
 import com.qagenie.testbe.application.dto.SpecVersionImpactDto;
 import com.qagenie.testbe.application.dto.SpecVersionResponseDto;
 
@@ -13,7 +14,7 @@ import java.util.List;
  * application's PENDING spec versions with their diffs attached.
  */
 public interface ChangeTrackerService {
-    ApplicationResponseDto analyze(Long applicationId);
+    SpecFetchResultDto analyze(Long applicationId);
     List<SpecVersionResponseDto> listPendingVersions(Long applicationId);
     SpecVersionImpactDto getPendingImpact(Long applicationId, Long specVersionId);
     ApplicationResponseDto heal(Long applicationId, Long specVersionId, String reviewedBy);

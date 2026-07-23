@@ -3,6 +3,8 @@ package com.qagenie.testbe.application.entity;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
+import org.hibernate.annotations.OnDelete;
+import org.hibernate.annotations.OnDeleteAction;
 
 import java.time.Instant;
 
@@ -32,6 +34,7 @@ public class SpecVersion {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "APPLICATION_ID", nullable = false)
+    @OnDelete(action = OnDeleteAction.CASCADE)
     private Application application;
 
     @Column(name = "VERSION_NUMBER", nullable = false)

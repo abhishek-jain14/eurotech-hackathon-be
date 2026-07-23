@@ -5,6 +5,8 @@ import com.qagenie.testbe.project.entity.Project;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
+import org.hibernate.annotations.OnDelete;
+import org.hibernate.annotations.OnDeleteAction;
 
 /**
  * Repeatable environment configuration for a Project (Dev/Staging/Prod, or
@@ -26,6 +28,7 @@ public class EnvironmentConfig extends AuditableEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "PROJECT_ID", nullable = false)
+    @OnDelete(action = OnDeleteAction.CASCADE)
     private Project project;
 
     @Column(name = "ENV_NAME", nullable = false, length = 50)

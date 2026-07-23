@@ -60,6 +60,14 @@
             <scope>runtime</scope>
         </dependency>
 
+        <!-- H2 web console (dev only) - Spring Boot 4 moved its autoconfiguration
+             out of spring-boot-autoconfigure into this dedicated module. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-h2console</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
         <!-- OpenAPI / Swagger -->
         <dependency>
             <groupId>org.springdoc</groupId>

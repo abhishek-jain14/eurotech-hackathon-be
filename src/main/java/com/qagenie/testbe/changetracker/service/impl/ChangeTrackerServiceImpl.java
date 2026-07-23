@@ -1,6 +1,7 @@
 package com.qagenie.testbe.changetracker.service.impl;
 
 import com.qagenie.testbe.application.dto.ApplicationResponseDto;
+import com.qagenie.testbe.application.dto.SpecFetchResultDto;
 import com.qagenie.testbe.application.dto.SpecVersionImpactDto;
 import com.qagenie.testbe.application.dto.SpecVersionResponseDto;
 import com.qagenie.testbe.application.service.ApplicationService;
@@ -23,7 +24,7 @@ public class ChangeTrackerServiceImpl implements ChangeTrackerService {
     private final ApplicationService applicationService;
 
     @Override
-    public ApplicationResponseDto analyze(Long applicationId) {
+    public SpecFetchResultDto analyze(Long applicationId) {
         log.info("Change analysis triggered for application id={}", applicationId);
         // fetchSpecFromUrl already does hash-guarded versioning: identical
         // content is a no-op, new content lands PENDING automatically.

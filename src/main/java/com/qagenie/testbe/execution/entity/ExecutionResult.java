@@ -4,6 +4,8 @@ import com.qagenie.testbe.scenario.entity.TestScenario;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
+import org.hibernate.annotations.OnDelete;
+import org.hibernate.annotations.OnDeleteAction;
 
 @Getter
 @Setter
@@ -18,6 +20,7 @@ public class ExecutionResult {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "RUN_ID", nullable = false)
+    @OnDelete(action = OnDeleteAction.CASCADE)
     private ExecutionRun executionRun;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
