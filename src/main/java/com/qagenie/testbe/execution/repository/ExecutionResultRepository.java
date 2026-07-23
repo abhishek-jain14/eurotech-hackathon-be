@@ -6,4 +6,5 @@ import java.util.List;
 
 public interface ExecutionResultRepository extends JpaRepository<ExecutionResult, Long> {
     List<ExecutionResult> findByExecutionRunId(Long runId);
+    List<ExecutionResult> findByExecutionRun_IdIn(List<Long> runIds);
 }
