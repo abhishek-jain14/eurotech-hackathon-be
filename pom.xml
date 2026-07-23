@@ -94,6 +94,13 @@
             <scope>runtime</scope>
         </dependency>
 
+        <!-- Maven -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <version>2.17.0</version>
+        </dependency>
+
         <!-- YAML parsing for the spec diff engine (OpenAPI/Swagger files are often YAML) -->
         <dependency>
             <groupId>com.fasterxml.jackson.dataformat</groupId>
@@ -126,7 +133,7 @@
         <dependency>
             <groupId>com.h2database</groupId>
             <artifactId>h2</artifactId>
-            <scope>runtime</scope>
+<!--            <scope>runtime</scope>-->
         </dependency>
 
     </dependencies>

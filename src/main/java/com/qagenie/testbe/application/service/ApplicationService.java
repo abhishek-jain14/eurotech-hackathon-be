@@ -38,4 +38,6 @@ public interface ApplicationService {
     ApplicationResponseDto approveSpecVersion(Long applicationId, Long specVersionId, String reviewedBy);
 
     SpecVersionResponseDto rejectSpecVersion(Long applicationId, Long specVersionId, String reviewedBy);
+
+    List<ApiEndpoint> getApiEndpoints(Long applicationId);
 }

@@ -1,5 +1,6 @@
 package com.qagenie.testbe.application.service.impl;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.qagenie.testbe.application.diff.SpecDiffEntry;
 import com.qagenie.testbe.application.diff.SpecDiffService;
 import com.qagenie.testbe.application.dto.*;
@@ -7,8 +8,10 @@ import com.qagenie.testbe.application.entity.*;
 import com.qagenie.testbe.application.mapper.ApplicationMapper;
 import com.qagenie.testbe.application.repository.ApplicationRepository;
 import com.qagenie.testbe.application.repository.SpecVersionRepository;
+import com.qagenie.testbe.application.service.ApiSpecParser;
 import com.qagenie.testbe.application.service.ApplicationService;
 import com.qagenie.testbe.application.service.SpecFetchService;
+import com.qagenie.testbe.application.service.SwaggerCondenser;
 import com.qagenie.testbe.common.exception.BusinessException;
 import com.qagenie.testbe.common.exception.ResourceNotFoundException;
 import com.qagenie.testbe.environment.entity.EnvironmentConfig;
@@ -20,6 +23,7 @@ import com.qagenie.testbe.scenario.repository.TestScenarioRepository;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -52,6 +56,12 @@ public class ApplicationServiceImpl implements ApplicationService {
 
     @Value("${qagenie.spec.swagger-suffix}")
     private String defaultSwaggerSuffix;
+
+    @Autowired
+    private SwaggerCondenser swaggerCondenser;
+
+    @Autowired
+    private ApiSpecParser apiSpecParser;
 
     // ---------------------------------------------------------------- CRUD
 
@@ -213,6 +223,11 @@ public class ApplicationServiceImpl implements ApplicationService {
         String url = resolveEffectiveSpecUrl(app);
         String content = specFetchService.fetchSpecContent(url, app.getProject());
 
+        try {
+            content = swaggerCondenser.condenseSwaggerJson(content);
+        } catch (JsonProcessingException e) {
+            log.error("Exception in condenseSwaggerJson");
+        }
         app.setSpecSourceUrl(url); // record what was actually used, useful for DERIVED mode audit too
         SpecIngestResult ingest = ingestContent(app, content, deriveFileName(url), SpecSource.FETCH_URL);
 
@@ -433,5 +448,19 @@ public class ApplicationServiceImpl implements ApplicationService {
             throw new BusinessException("Spec version does not belong to this application", "VERSION_APPLICATION_MISMATCH");
         }
         return version;
+    }
+
+    @Override
+    public List<ApiEndpoint> getApiEndpoints(Long applicationId) {
+        Optional<SpecVersion> current = specVersionRepository.findByApplicationIdAndStatus(applicationId, SpecVersionStatus.CURRENT);
+        if(current.isPresent()){
+          String contentJson =  current.get().getContent();
+            try {
+                return apiSpecParser.parseApiEndpoints(contentJson);
+            } catch (JsonProcessingException e) {
+                log.error("Error while parsing API Endpoints");
+            }
+        }
+        return List.of();
     }
 }

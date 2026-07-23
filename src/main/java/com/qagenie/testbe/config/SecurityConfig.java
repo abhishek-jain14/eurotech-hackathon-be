@@ -48,8 +48,11 @@ public class SecurityConfig {
     @ConditionalOnProperty(prefix = "qagenie.security.jwt", name = "enabled", havingValue = "true", matchIfMissing = true)
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-                .csrf(csrf -> csrf.disable())
+                .csrf(csrf -> csrf
+                        .ignoringRequestMatchers("/h2-console/**")
+                        .disable())
                 .cors(org.springframework.security.config.Customizer.withDefaults())
+                .headers(headers -> headers.frameOptions(frame -> frame.sameOrigin())) // Required for H2 Console
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .headers(headers -> headers.frameOptions(frame -> frame.sameOrigin()))
                 .authorizeHttpRequests(auth -> auth
@@ -82,6 +85,7 @@ public class SecurityConfig {
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .headers(headers -> headers.frameOptions(frame -> frame.sameOrigin()))
                 .anonymous(anon -> anon.authorities(anonymousAuthorities))
+                .headers(headers -> headers.frameOptions(frame -> frame.sameOrigin()))
                 .authorizeHttpRequests(auth -> auth.anyRequest().permitAll());
 
         return http.build();

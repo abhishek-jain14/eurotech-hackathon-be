@@ -153,4 +153,13 @@ public class ApplicationController {
         String reviewer = auth != null ? auth.getName() : "SYSTEM";
         return ApiResponse.ok("Spec version rejected", applicationService.rejectSpecVersion(id, versionId, reviewer));
     }
+
+    @GetMapping("/{id}/fetch-endpoints")
+    @PreAuthorize("hasAnyRole('ADMIN','TESTER')")
+    @Operation(summary = "Approve a pending spec version, promoting it to CURRENT",
+            description = "The previous CURRENT version is demoted to SUPERSEDED, never deleted.")
+    public ApiResponse<List<ApiEndpoint>> fetchEndpoints(@PathVariable Long id) {
+
+        return ApiResponse.ok("Apis Found", applicationService.getApiEndpoints(id));
+    }
 }
