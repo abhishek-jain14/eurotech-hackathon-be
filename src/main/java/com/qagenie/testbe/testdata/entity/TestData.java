@@ -2,6 +2,7 @@ package com.qagenie.testbe.testdata.entity;
 
 import com.qagenie.testbe.common.audit.AuditableEntity;
 import com.qagenie.testbe.application.entity.Application;
+import com.qagenie.testbe.scenario.entity.TestScenario;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -23,6 +24,10 @@ public class TestData extends AuditableEntity {
     @JoinColumn(name = "APPLICATION_ID", nullable = false)
     @OnDelete(action = OnDeleteAction.CASCADE)
     private Application application;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "SCENARIO_ID", nullable = false)
+    private TestScenario testScenario;
 
     @Column(name = "RECORD_NAME", nullable = false, length = 150)
     private String recordName;

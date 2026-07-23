@@ -12,6 +12,8 @@ public interface TestDataMapper {
     TestDataResponseDto toResponseDto(TestData entity);
 
     @Mapping(target = "application", ignore = true)
+    @Mapping(target = "application.id", source = "applicationId")
+    @Mapping(target = "testScenario.id", source = "scenarioId")
     TestData toEntity(TestDataRequestDto dto);
 
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
