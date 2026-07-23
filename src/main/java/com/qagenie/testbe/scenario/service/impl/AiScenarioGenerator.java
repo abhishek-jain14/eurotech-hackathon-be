@@ -114,12 +114,17 @@ public class AiScenarioGenerator implements ScenarioGenerator {
                 {"path": "<endpoint path>", "httpMethod": "<HTTP method>", "scenarioType": "POSITIVE" or "NEGATIVE",
                  "name": "<short scenario name>", "gherkin": "<the scenario rendered EXACTLY in the step format below, as a single string with \\n for newlines>"}
 
-                Required step format (follow this precisely, including wording and spelling):
+                Required step format (follow this precisely, including wording and spelling). This is a Cucumber
+                Scenario Outline - header and path fields are <fieldName> placeholders (Test Data supplies the
+                actual value per row at execution time, so do NOT invent a sample value for them); query fields
+                get a concrete sample value directly (no Test Data source exists for query fields); do NOT emit
+                an Examples: table, it is assembled separately at execution time:
                 @%s @<endpointNameTag, lowercase_snake_case derived from method+path> @positive (or @negative)
-                Scenario: <short description>
-                  Given set header parameter <name> to <value>      (one line per header parameter, omit if none)
-                  Given set query parameter <name> to <value>       (one line per query parameter, omit if none)
-                  When user send <HTTP_METHOD> request to %s application, resource : <path, with any {pathParam} placeholders left EXACTLY as-is, e.g. {id} - do NOT substitute them with a sample value, Test Data supplies the actual value at execution time>
+                Scenario Outline: <short description>
+                  Given set header parameter <name> to <name>       (one line per header field, using the SAME <name> token as a placeholder - omit if none)
+                  Given set query parameter <name> to <concrete sample value>   (one line per query parameter, omit if none)
+                  And the request body is <requestBody>              (only if the endpoint has a requestBody - literal token "<requestBody>", omit otherwise)
+                  When user send <HTTP_METHOD> request to %s application, resource : <path, with any {pathParam} OpenAPI placeholders rewritten to Cucumber-style <pathParam> tokens, e.g. {id} becomes <id>>
                   Then user recieves http status code <200/201 for positive, 400 for negative>
                 """.formatted(applicationName, wanted, endpointsJson, sanitizeTag(applicationName), applicationName);
     }

@@ -1,6 +1,7 @@
 package com.qagenie.testbe.execution.entity;
 
 import com.qagenie.testbe.scenario.entity.TestScenario;
+import com.qagenie.testbe.testdata.entity.TestData;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -26,6 +27,12 @@ public class ExecutionResult {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "SCENARIO_ID", nullable = false)
     private TestScenario scenario;
+
+    /** Which TEST_DATA row (Examples row) this result corresponds to - null when the
+     * scenario had no substitutable fields and ran once with no per-row data. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "TEST_DATA_ID")
+    private TestData testData;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "RESULT_STATUS", nullable = false, length = 20)

@@ -20,6 +20,8 @@ public interface ExecutionMapper {
 
     @Mapping(target = "scenarioId", source = "scenario.id")
     @Mapping(target = "scenarioName", source = "scenario.name")
+    @Mapping(target = "testDataId", source = "testData.id")
+    @Mapping(target = "testDataRecordName", source = "testData.recordName")
     ExecutionResultDto toResultDto(ExecutionResult entity);
 
     List<ExecutionResultDto> toResultDtoList(List<ExecutionResult> entities);

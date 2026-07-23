@@ -47,31 +47,33 @@ public class RuleBasedScenarioGenerator implements ScenarioGenerator {
     }
 
     private TestScenario buildScenario(Application application, SpecVersion specVersion, ApiEndpoint endpoint, boolean positive) {
-        Map<String, Object> headerParams = new LinkedHashMap<>();
+        // Header and path fields become <fieldName> Scenario Outline placeholders -
+        // Test Data supplies the actual value per Examples row at execution time.
+        // Query fields have no Test Data capture mechanism (see TestDataPage), so they
+        // keep a concrete generated sample value, same as before.
+        List<String> headerFieldNames = new ArrayList<>();
+        List<String> pathFieldNames = new ArrayList<>();
         Map<String, Object> queryParams = new LinkedHashMap<>();
-        // Path params (e.g. {id}) are left exactly as-is in the resource string, NOT
-        // substituted with a sample value here - Test Data supplies the actual value
-        // for each {name} placeholder at execution time.
         String resolvedResource = endpoint.getPath();
 
         if (endpoint.getParameters() != null) {
             for (ApiParameter param : endpoint.getParameters()) {
                 if (param.getName() == null) continue;
-                if (!positive && !param.isRequired()) continue; // negative case targets required params only
+                if (!positive && !param.isRequired()) continue; // negative case targets required fields only
 
                 String in = param.getIn() == null ? "query" : param.getIn().toLowerCase();
-                if ("path".equals(in)) {
-                    continue; // stays as {paramName} in resolvedResource, resolved from Test Data at run time
-                }
-
-                Object value = sampleValue(param.getType(), positive);
                 switch (in) {
-                    case "header" -> headerParams.put(param.getName(), value);
-                    default -> queryParams.put(param.getName(), value);
+                    case "header" -> headerFieldNames.add(param.getName());
+                    case "path" -> {
+                        pathFieldNames.add(param.getName());
+                        resolvedResource = resolvedResource.replace("{" + param.getName() + "}", "<" + param.getName() + ">");
+                    }
+                    default -> queryParams.put(param.getName(), sampleValue(param.getType(), positive));
                 }
             }
         }
 
+        boolean hasRequestBody = endpoint.getRequestBody() != null && !endpoint.getRequestBody().isEmpty();
         int statusCode = positive ? defaultSuccessStatus(endpoint.getHttpMethod()) : 400;
         String title = (endpoint.getSummary() != null && !endpoint.getSummary().isBlank())
                 ? endpoint.getSummary()
@@ -88,7 +90,7 @@ public class RuleBasedScenarioGenerator implements ScenarioGenerator {
         scenario.setSource(ScenarioSource.AI);
         scenario.setRiskLevel(RiskLevel.MEDIUM);
         scenario.setActive(true);
-        scenario.setDescription(buildGherkin(application, endpoint, resolvedResource, headerParams, queryParams, statusCode, description, positive));
+        scenario.setDescription(buildGherkin(application, endpoint, resolvedResource, headerFieldNames, queryParams, hasRequestBody, statusCode, description, positive));
         scenario.setHeaderJson(endpointFieldExtractor.toJson(endpointFieldExtractor.fieldsIn(endpoint, "header")));
         scenario.setPathParamJson(endpointFieldExtractor.toJson(endpointFieldExtractor.fieldsIn(endpoint, "path")));
         scenario.setRequestParamJson(endpointFieldExtractor.toJson(endpointFieldExtractor.fieldsIn(endpoint, "query")));
@@ -99,15 +101,18 @@ public class RuleBasedScenarioGenerator implements ScenarioGenerator {
      * House step format:
      * <pre>
      * &#64;applicationName &#64;endpointName &#64;positive
-     * Scenario: description
-     *   Given set header parameter name to value      (one per header)
-     *   Given set query parameter name to value        (one per query param)
+     * Scenario Outline: description
+     *   Given set header parameter name to &lt;name&gt;         (one per header field - substituted from Test Data)
+     *   Given set query parameter name to value          (one per query param - concrete sample value)
+     *   And the request body is &lt;requestBody&gt;              (only when the endpoint has a request body)
      *   When user send HTTP_METHOD request to applicationName application, resource : resource
      *   Then user recieves http status code statusCode
      * </pre>
+     * No "Examples:" table is emitted here - it's assembled at execution time from
+     * whatever Test Data rows are linked to this scenario.
      */
     private String buildGherkin(Application application, ApiEndpoint endpoint, String resolvedResource,
-                                 Map<String, Object> headerParams, Map<String, Object> queryParams,
+                                 List<String> headerFieldNames, Map<String, Object> queryParams, boolean hasRequestBody,
                                  int statusCode, String description, boolean positive) {
         String applicationName = application.getName();
         StringBuilder sb = new StringBuilder();
@@ -115,13 +120,16 @@ public class RuleBasedScenarioGenerator implements ScenarioGenerator {
         sb.append("@").append(sanitizeTag(applicationName))
                 .append(" @").append(sanitizeTag(endpoint.getHttpMethod() + " " + endpoint.getPath()))
                 .append(" @").append(positive ? "positive" : "negative").append("\n");
-        sb.append("Scenario: ").append(description).append("\n");
+        sb.append("Scenario Outline: ").append(description).append("\n");
 
-        for (Map.Entry<String, Object> header : headerParams.entrySet()) {
-            sb.append("  Given set header parameter ").append(header.getKey()).append(" to ").append(header.getValue()).append("\n");
+        for (String name : headerFieldNames) {
+            sb.append("  Given set header parameter ").append(name).append(" to <").append(name).append(">\n");
         }
         for (Map.Entry<String, Object> query : queryParams.entrySet()) {
             sb.append("  Given set query parameter ").append(query.getKey()).append(" to ").append(query.getValue()).append("\n");
+        }
+        if (hasRequestBody) {
+            sb.append("  And the request body is <requestBody>\n");
         }
 
         sb.append("  When user send ").append(endpoint.getHttpMethod()).append(" request to ")
