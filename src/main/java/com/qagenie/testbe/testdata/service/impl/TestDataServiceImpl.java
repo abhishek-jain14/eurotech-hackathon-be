@@ -4,6 +4,8 @@ import com.qagenie.testbe.common.exception.BusinessException;
 import com.qagenie.testbe.common.exception.ResourceNotFoundException;
 import com.qagenie.testbe.application.entity.Application;
 import com.qagenie.testbe.application.repository.ApplicationRepository;
+import com.qagenie.testbe.scenario.entity.TestScenario;
+import com.qagenie.testbe.scenario.repository.TestScenarioRepository;
 import com.qagenie.testbe.testdata.dto.TestDataRequestDto;
 import com.qagenie.testbe.testdata.dto.TestDataResponseDto;
 import com.qagenie.testbe.testdata.entity.TestData;
@@ -24,6 +26,7 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
@@ -33,10 +36,15 @@ public class TestDataServiceImpl implements TestDataService {
     private final TestDataRepository testDataRepository;
     private final ApplicationRepository applicationRepository;
     private final TestDataMapper testDataMapper;
+    private final TestScenarioRepository testScenarioRepository;
 
     @Override
     public TestDataResponseDto create(TestDataRequestDto request) {
         Application application = findApplication(request.applicationId());
+        TestScenario testScenario= findTestScenario(request.scenarioId());
+        if (Objects.isNull(application) || Objects.isNull(testScenario)) {
+            throw new RuntimeException("applicationId or scenarioId is not valid");
+        }
         TestData entity = testDataMapper.toEntity(request);
         entity.setApplication(application);
         if (entity.getStatus() == null) {
@@ -114,5 +122,9 @@ public class TestDataServiceImpl implements TestDataService {
 
     private Application findApplication(Long id) {
         return applicationRepository.findById(id).orElseThrow(() -> ResourceNotFoundException.of("Application", id));
+    }
+
+    private TestScenario findTestScenario(Long id){
+        return testScenarioRepository.getReferenceById(id);
     }
 }
