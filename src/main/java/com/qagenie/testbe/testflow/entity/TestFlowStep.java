@@ -4,6 +4,8 @@ import com.qagenie.testbe.scenario.entity.TestScenario;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
+import org.hibernate.annotations.OnDelete;
+import org.hibernate.annotations.OnDeleteAction;
 
 @Getter
 @Setter
@@ -18,6 +20,7 @@ public class TestFlowStep {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "FLOW_ID", nullable = false)
+    @OnDelete(action = OnDeleteAction.CASCADE)
     private TestFlow testFlow;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)

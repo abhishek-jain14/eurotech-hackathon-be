@@ -218,7 +218,7 @@ public class ApplicationServiceImpl implements ApplicationService {
     }
 
     @Override
-    public ApplicationResponseDto fetchSpecFromUrl(Long applicationId) {
+    public SpecFetchResultDto fetchSpecFromUrl(Long applicationId) {
         Application app = findEntity(applicationId);
         String url = resolveEffectiveSpecUrl(app);
         String content = specFetchService.fetchSpecContent(url, app.getProject());
@@ -229,9 +229,25 @@ public class ApplicationServiceImpl implements ApplicationService {
             log.error("Exception in condenseSwaggerJson");
         }
         app.setSpecSourceUrl(url); // record what was actually used, useful for DERIVED mode audit too
-        ingestContent(app, content, deriveFileName(url), SpecSource.FETCH_URL);
-        return toResponseDtoWithVersionInfo(app);
+        SpecIngestResult ingest = ingestContent(app, content, deriveFileName(url), SpecSource.FETCH_URL);
+
+        if (ingest.contentUnchanged()) {
+            throw new BusinessException("No change in specification file.", "SPEC_UNCHANGED");
+        }
+
+        if (ingest.previousCurrentContent() == null) {
+            // First version ever for this application - nothing to diff against.
+            return new SpecFetchResultDto(true, "Initial swagger specification captured and set as current",
+                    toResponseDtoWithVersionInfo(app), toVersionDto(ingest.resultVersion()), List.of());
+        }
+
+        List<EndpointFieldDiffDto> endpointDiffs = specDiffService.diffFields(ingest.previousCurrentContent(), content);
+        return new SpecFetchResultDto(true, "Changes detected in the swagger specification - review the endpoint differences",
+                toResponseDtoWithVersionInfo(app), toVersionDto(ingest.resultVersion()), endpointDiffs);
     }
+
+    /** Outcome of {@link #ingestContent}: whether content changed vs. CURRENT, the relevant version row, and the previous CURRENT content (for diffing), or null if there was none yet. */
+    private record SpecIngestResult(boolean contentUnchanged, SpecVersion resultVersion, String previousCurrentContent) {}
 
     /**
      * Core hash-guarded versioning rule:
@@ -241,17 +257,18 @@ public class ApplicationServiceImpl implements ApplicationService {
      *  - genuinely new content, no CURRENT exists yet (first ever) -> becomes CURRENT immediately
      *  - genuinely new content, a CURRENT already exists -> becomes PENDING, awaits manual approve/reject
      */
-    private void ingestContent(Application app, String content, String fileName, SpecSource source) {
+    private SpecIngestResult ingestContent(Application app, String content, String fileName, SpecSource source) {
         String hash = sha256(content);
         Instant now = Instant.now();
 
         Optional<SpecVersion> current = specVersionRepository.findByApplicationIdAndStatus(app.getId(), SpecVersionStatus.CURRENT);
+        String previousCurrentContent = current.map(SpecVersion::getContent).orElse(null);
 
         if (current.isPresent() && current.get().getContentHash().equals(hash)) {
             current.get().setLastCheckedAt(now);
             specVersionRepository.save(current.get());
             log.info("Spec content for application id={} unchanged (hash match) - no new version created", app.getId());
-            return;
+            return new SpecIngestResult(true, current.get(), previousCurrentContent);
         }
 
         Optional<SpecVersion> existingSameHash = specVersionRepository.findByApplicationIdAndContentHash(app.getId(), hash);
@@ -261,7 +278,7 @@ public class ApplicationServiceImpl implements ApplicationService {
             specVersionRepository.save(existing);
             log.info("Spec content for application id={} matches an existing {} version (id={}) - not re-flagging",
                     app.getId(), existing.getStatus(), existing.getId());
-            return;
+            return new SpecIngestResult(false, existing, previousCurrentContent);
         }
 
         int nextVersionNumber = (int) specVersionRepository.countByApplicationId(app.getId()) + 1;
@@ -287,6 +304,7 @@ public class ApplicationServiceImpl implements ApplicationService {
                     nextVersionNumber, app.getId(), source);
         }
         specVersionRepository.save(version);
+        return new SpecIngestResult(false, version, previousCurrentContent);
     }
 
     private void applySpecVersionToApplication(Application app, SpecVersion version) {

@@ -1,6 +1,7 @@
 package com.qagenie.testbe.changetracker.controller;
 
 import com.qagenie.testbe.application.dto.ApplicationResponseDto;
+import com.qagenie.testbe.application.dto.SpecFetchResultDto;
 import com.qagenie.testbe.application.dto.SpecVersionImpactDto;
 import com.qagenie.testbe.application.dto.SpecVersionResponseDto;
 import com.qagenie.testbe.changetracker.service.ChangeTrackerService;
@@ -35,8 +36,9 @@ public class ChangeTrackerController {
     @Operation(summary = "Re-fetch the live spec and compare against the current version",
             description = "Identical content is a no-op. Genuinely different content lands as a new PENDING " +
                     "spec version - see /api/v1/applications/{id}/spec-versions for the result.")
-    public ApiResponse<ApplicationResponseDto> analyze(@PathVariable Long applicationId) {
-        return ApiResponse.ok("Analysis complete", changeTrackerService.analyze(applicationId));
+    public ApiResponse<SpecFetchResultDto> analyze(@PathVariable Long applicationId) {
+        SpecFetchResultDto result = changeTrackerService.analyze(applicationId);
+        return ApiResponse.ok(result.message(), result);
     }
 
     @GetMapping("/application/{applicationId}")

@@ -110,8 +110,9 @@ public class ApplicationController {
                     "reach the endpoint. Fails with a clear TLS_REQUIRED error if the endpoint needs mutual TLS " +
                     "or a custom trust store the Project hasn't been configured with yet. Same hash-guard/pending " +
                     "rules as manual upload apply.")
-    public ApiResponse<ApplicationResponseDto> fetchSpec(@PathVariable Long id) {
-        return ApiResponse.ok("Specification fetched", applicationService.fetchSpecFromUrl(id));
+    public ApiResponse<SpecFetchResultDto> fetchSpec(@PathVariable Long id) {
+        SpecFetchResultDto result = applicationService.fetchSpecFromUrl(id);
+        return ApiResponse.ok(result.message(), result);
     }
 
     // ---------------------------------------------------------- Version history / approval

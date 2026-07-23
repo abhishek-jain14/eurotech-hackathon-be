@@ -6,6 +6,8 @@ import com.qagenie.testbe.application.entity.Application;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
+import org.hibernate.annotations.OnDelete;
+import org.hibernate.annotations.OnDeleteAction;
 
 import java.time.Instant;
 
@@ -22,6 +24,7 @@ public class ExecutionRun extends AuditableEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "APPLICATION_ID", nullable = false)
+    @OnDelete(action = OnDeleteAction.CASCADE)
     private Application application;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)

@@ -5,6 +5,8 @@ import com.qagenie.testbe.project.entity.Project;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
+import org.hibernate.annotations.OnDelete;
+import org.hibernate.annotations.OnDeleteAction;
 
 /**
  * Simple name/value config pair scoped to a Project - shown behind the
@@ -26,6 +28,7 @@ public class EnvironmentVariable extends AuditableEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "PROJECT_ID", nullable = false)
+    @OnDelete(action = OnDeleteAction.CASCADE)
     private Project project;
 
     @Column(name = "VAR_NAME", nullable = false, length = 150)

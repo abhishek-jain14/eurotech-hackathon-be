@@ -18,8 +18,13 @@ public interface ApplicationService {
     /** Manual file upload - versioned (hash-guarded, pending unless it's the first version). */
     ApplicationResponseDto uploadSpec(Long applicationId, MultipartFile file);
 
-    /** Resolves the effective URL (derived or custom), fetches via the parent Project's TLS config, versions the result. */
-    ApplicationResponseDto fetchSpecFromUrl(Long applicationId);
+    /**
+     * Resolves the effective URL (derived or custom), fetches via the parent Project's TLS config, versions the
+     * result. If the fetched content hashes the same as the current version, returns changed=false with message
+     * "Swagger file is latest" and no diff. Otherwise returns changed=true with a per-endpoint, field-level
+     * old/new breakdown of what was added, deleted, renamed, or changed.
+     */
+    SpecFetchResultDto fetchSpecFromUrl(Long applicationId);
 
     /** What URL WOULD be used right now, without fetching - for FE preview and for Change Tracker. */
     String resolveEffectiveSpecUrl(Long applicationId);
