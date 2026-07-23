@@ -10,8 +10,10 @@ import com.qagenie.testbe.scenario.dto.ScenarioResponseDto;
 import com.qagenie.testbe.scenario.entity.TestScenario;
 import com.qagenie.testbe.scenario.mapper.ScenarioMapper;
 import com.qagenie.testbe.scenario.repository.TestScenarioRepository;
+import com.qagenie.testbe.scenario.service.GherkinGenerator;
 import com.qagenie.testbe.scenario.service.ScenarioService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -27,13 +29,16 @@ public class ScenarioServiceImpl implements ScenarioService {
     private final SpecVersionRepository specVersionRepository;
     private final ScenarioMapper scenarioMapper;
 
+    @Autowired
+    private GherkinGenerator gherkinGenerator;
+
     @Override
     public ScenarioResponseDto create(ScenarioRequestDto request) {
         Application application = applicationRepository.findById(request.applicationId())
                 .orElseThrow(() -> ResourceNotFoundException.of("Application", request.applicationId()));
         TestScenario entity = scenarioMapper.toEntity(request);
         entity.setApplication(application);
-
+        entity.setDescription(gherkinGenerator.generateGherkin(request.apiTestData()));
         // Stamp whichever spec version is CURRENT right now, so later drift
         // detection can tell precisely which scenarios a given change affects.
         // Left null if the application has no spec ingested yet (manual
