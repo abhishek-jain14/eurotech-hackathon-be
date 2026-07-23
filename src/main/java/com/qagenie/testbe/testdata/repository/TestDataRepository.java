@@ -10,4 +10,5 @@ import java.util.List;
 public interface TestDataRepository extends JpaRepository<TestData, Long> {
     Page<TestData> findByApplicationId(Long applicationId, Pageable pageable);
     List<TestData> findByTestScenarioId(Long scenarioId);
+    List<TestData> findByTestScenario_IdIn(List<Long> scenarioIds);
 }

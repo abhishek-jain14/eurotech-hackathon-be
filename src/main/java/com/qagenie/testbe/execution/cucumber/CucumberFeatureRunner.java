@@ -31,7 +31,8 @@ public class CucumberFeatureRunner {
     @Value("${qagenie.execution.feature-dir}")
     private String featureDir;
 
-    public record StepResult(boolean passed, long durationMs, String errorMessage) {}
+    public record StepResult(boolean passed, long durationMs, String errorMessage,
+                              ExecutionContextHolder.CallLog callLog) {}
 
     public List<StepResult> run(String featureText, String baseUrl) {
         Path dir = Path.of(featureDir);
@@ -58,6 +59,7 @@ public class CucumberFeatureRunner {
                 "--monochrome"
         };
 
+        List<ExecutionContextHolder.CallLog> callLogs;
         ExecutionContextHolder.setBaseUrl(baseUrl);
         try {
             byte exitStatus = Main.run(argv, Thread.currentThread().getContextClassLoader());
@@ -66,10 +68,23 @@ public class CucumberFeatureRunner {
             log.error("Cucumber execution failed for feature {}", featureFile, e);
             throw new IllegalStateException("Cucumber execution failed: " + e.getMessage(), e);
         } finally {
+            callLogs = new ArrayList<>(ExecutionContextHolder.getCallLogs());
             ExecutionContextHolder.clear();
         }
 
-        return parseReport(reportFile);
+        return zipWithCallLogs(parseReport(reportFile), callLogs);
+    }
+
+    /** Cucumber runs Examples rows single-threaded, in order, so the Nth parsed
+     * report result corresponds to the Nth CallLog ApiSteps recorded. */
+    private List<StepResult> zipWithCallLogs(List<StepResult> parsed, List<ExecutionContextHolder.CallLog> callLogs) {
+        List<StepResult> combined = new ArrayList<>(parsed.size());
+        for (int i = 0; i < parsed.size(); i++) {
+            StepResult base = parsed.get(i);
+            ExecutionContextHolder.CallLog callLog = i < callLogs.size() ? callLogs.get(i) : null;
+            combined.add(new StepResult(base.passed(), base.durationMs(), base.errorMessage(), callLog));
+        }
+        return combined;
     }
 
     private List<StepResult> parseReport(Path reportFile) {
@@ -111,8 +126,8 @@ public class CucumberFeatureRunner {
         }
 
         long durationMs = durationNanos / 1_000_000;
-        if (anyFailed) return new StepResult(false, durationMs, firstError != null ? firstError : "Step failed");
-        if (anyUndefined) return new StepResult(false, durationMs, "Cucumber step undefined/pending - check step definitions");
-        return new StepResult(true, durationMs, null);
+        if (anyFailed) return new StepResult(false, durationMs, firstError != null ? firstError : "Step failed", null);
+        if (anyUndefined) return new StepResult(false, durationMs, "Cucumber step undefined/pending - check step definitions", null);
+        return new StepResult(true, durationMs, null, null);
     }
 }

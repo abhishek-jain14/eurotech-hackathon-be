@@ -8,16 +8,19 @@ import com.qagenie.testbe.environment.entity.EnvironmentConfig;
 import com.qagenie.testbe.environment.repository.EnvironmentConfigRepository;
 import com.qagenie.testbe.execution.cucumber.CucumberFeatureRunner;
 import com.qagenie.testbe.execution.cucumber.CucumberFeatureRunner.StepResult;
+import com.qagenie.testbe.execution.cucumber.ExecutionContextHolder.CallLog;
 import com.qagenie.testbe.execution.cucumber.GherkinFeatureBuilder;
 import com.qagenie.testbe.execution.dto.ExecutionRequestDto;
 import com.qagenie.testbe.execution.dto.ExecutionRunResponseDto;
 import com.qagenie.testbe.execution.entity.ExecutionResult;
 import com.qagenie.testbe.execution.entity.ExecutionRun;
+import com.qagenie.testbe.execution.entity.ExecutionScenarioResult;
 import com.qagenie.testbe.execution.entity.ExecutionStatus;
 import com.qagenie.testbe.execution.entity.ResultStatus;
 import com.qagenie.testbe.execution.mapper.ExecutionMapper;
 import com.qagenie.testbe.execution.repository.ExecutionResultRepository;
 import com.qagenie.testbe.execution.repository.ExecutionRunRepository;
+import com.qagenie.testbe.execution.repository.ExecutionScenarioResultRepository;
 import com.qagenie.testbe.execution.service.ExecutionService;
 import com.qagenie.testbe.scenario.entity.TestScenario;
 import com.qagenie.testbe.scenario.repository.TestScenarioRepository;
@@ -51,6 +54,7 @@ public class ExecutionServiceImpl implements ExecutionService {
 
     private final ExecutionRunRepository executionRunRepository;
     private final ExecutionResultRepository executionResultRepository;
+    private final ExecutionScenarioResultRepository executionScenarioResultRepository;
     private final ApplicationRepository applicationRepository;
     private final EnvironmentConfigRepository environmentConfigRepository;
     private final TestScenarioRepository scenarioRepository;
@@ -89,6 +93,7 @@ public class ExecutionServiceImpl implements ExecutionService {
 
             List<ExecutionResult> results = executeScenario(run, scenario, environment);
             executionResultRepository.saveAll(results);
+            executionScenarioResultRepository.save(buildScenarioSummary(run, scenario, results));
             for (ExecutionResult result : results) {
                 if (result.getResultStatus() == ResultStatus.PASS) passed++;
                 else if (result.getResultStatus() == ResultStatus.FAIL) failed++;
@@ -156,6 +161,7 @@ public class ExecutionServiceImpl implements ExecutionService {
             result.setResultStatus(stepResult.passed() ? ResultStatus.PASS : ResultStatus.FAIL);
             result.setResponseTimeMs(stepResult.durationMs());
             result.setErrorMessage(stepResult.errorMessage());
+            applyCallLog(result, stepResult.callLog());
             results.add(result);
         }
         // Any test data rows Cucumber didn't produce a matching result for (report/parse mismatch).
@@ -169,6 +175,51 @@ public class ExecutionServiceImpl implements ExecutionService {
             results.add(result);
         }
         return results;
+    }
+
+    /**
+     * Aggregates a scenario's per-Test-Data-row EXECUTION_RESULT rows (already built by
+     * executeScenario) into the single EXECUTION_SCENARIO_RESULT summary row for this run -
+     * PASS only if every row passed, FAIL if any row failed, SKIPPED only if none ran.
+     */
+    private ExecutionScenarioResult buildScenarioSummary(ExecutionRun run, TestScenario scenario, List<ExecutionResult> results) {
+        int passedCount = 0, failedCount = 0, skippedCount = 0;
+        long totalResponseTimeMs = 0;
+        for (ExecutionResult result : results) {
+            switch (result.getResultStatus()) {
+                case PASS -> passedCount++;
+                case FAIL -> failedCount++;
+                case SKIPPED -> skippedCount++;
+            }
+            if (result.getResponseTimeMs() != null) {
+                totalResponseTimeMs += result.getResponseTimeMs();
+            }
+        }
+        ResultStatus overallStatus = failedCount > 0 ? ResultStatus.FAIL
+                : (passedCount > 0 ? ResultStatus.PASS : ResultStatus.SKIPPED);
+
+        ExecutionScenarioResult summary = new ExecutionScenarioResult();
+        summary.setExecutionRun(run);
+        summary.setScenario(scenario);
+        summary.setOverallStatus(overallStatus);
+        summary.setTotalTestData(results.size());
+        summary.setPassedCount(passedCount);
+        summary.setFailedCount(failedCount);
+        summary.setSkippedCount(skippedCount);
+        summary.setTotalResponseTimeMs(totalResponseTimeMs);
+        return summary;
+    }
+
+    /** Persists the full (untruncated) request/response ApiSteps captured for this row. */
+    private void applyCallLog(ExecutionResult result, CallLog callLog) {
+        if (callLog == null) return;
+        result.setRequestMethod(callLog.requestMethod());
+        result.setRequestUrl(callLog.requestUrl());
+        result.setRequestHeaders(callLog.requestHeadersJson());
+        result.setRequestBody(callLog.requestBody());
+        result.setResponseStatusCode(callLog.responseStatus());
+        result.setResponseHeaders(callLog.responseHeadersJson());
+        result.setResponseBody(callLog.responseBody());
     }
 
     /**
@@ -204,11 +255,14 @@ public class ExecutionServiceImpl implements ExecutionService {
 
     private ExecutionRunResponseDto buildFullResponse(ExecutionRun run) {
         List<ExecutionResult> results = executionResultRepository.findByExecutionRunId(run.getId());
+        List<ExecutionScenarioResult> scenarioResults = executionScenarioResultRepository.findByExecutionRunId(run.getId());
         ExecutionRunResponseDto base = executionMapper.toResponseDto(run);
         return new ExecutionRunResponseDto(
                 base.id(), base.applicationId(), base.environmentId(), base.environmentName(), base.suiteName(),
                 base.status(), base.startedAt(), base.completedAt(), base.totalScenarios(),
-                base.passedCount(), base.failedCount(), executionMapper.toResultDtoList(results)
+                base.passedCount(), base.failedCount(),
+                executionMapper.toScenarioResultDtoList(scenarioResults),
+                executionMapper.toResultDtoList(results)
         );
     }
 }

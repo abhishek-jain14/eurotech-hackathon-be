@@ -2,8 +2,10 @@ package com.qagenie.testbe.execution.mapper;
 
 import com.qagenie.testbe.execution.dto.ExecutionResultDto;
 import com.qagenie.testbe.execution.dto.ExecutionRunResponseDto;
+import com.qagenie.testbe.execution.dto.ExecutionScenarioResultDto;
 import com.qagenie.testbe.execution.entity.ExecutionResult;
 import com.qagenie.testbe.execution.entity.ExecutionRun;
+import com.qagenie.testbe.execution.entity.ExecutionScenarioResult;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 
@@ -15,6 +17,7 @@ public interface ExecutionMapper {
     @Mapping(target = "applicationId", source = "application.id")
     @Mapping(target = "environmentId", source = "environment.id")
     @Mapping(target = "environmentName", source = "environment.envName")
+    @Mapping(target = "scenarioResults", ignore = true)
     @Mapping(target = "results", ignore = true)
     ExecutionRunResponseDto toResponseDto(ExecutionRun entity);
 
@@ -25,4 +28,10 @@ public interface ExecutionMapper {
     ExecutionResultDto toResultDto(ExecutionResult entity);
 
     List<ExecutionResultDto> toResultDtoList(List<ExecutionResult> entities);
+
+    @Mapping(target = "scenarioId", source = "scenario.id")
+    @Mapping(target = "scenarioName", source = "scenario.name")
+    ExecutionScenarioResultDto toScenarioResultDto(ExecutionScenarioResult entity);
+
+    List<ExecutionScenarioResultDto> toScenarioResultDtoList(List<ExecutionScenarioResult> entities);
 }

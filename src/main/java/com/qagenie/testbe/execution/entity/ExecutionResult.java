@@ -44,4 +44,33 @@ public class ExecutionResult {
     @Lob
     @Column(name = "ERROR_MESSAGE")
     private String errorMessage;
+
+    @Column(name = "REQUEST_METHOD", length = 10)
+    private String requestMethod;
+
+    @Lob
+    @Column(name = "REQUEST_URL")
+    private String requestUrl;
+
+    /** JSON object of header name -> value, exactly as sent. */
+    @Lob
+    @Column(name = "REQUEST_HEADERS")
+    private String requestHeaders;
+
+    @Lob
+    @Column(name = "REQUEST_BODY")
+    private String requestBody;
+
+    @Column(name = "RESPONSE_STATUS_CODE")
+    private Integer responseStatusCode;
+
+    /** JSON object of header name -> value list, exactly as received. */
+    @Lob
+    @Column(name = "RESPONSE_HEADERS")
+    private String responseHeaders;
+
+    /** Full response body, untruncated (unlike errorMessage's 500-char snippet on failure). */
+    @Lob
+    @Column(name = "RESPONSE_BODY")
+    private String responseBody;
 }

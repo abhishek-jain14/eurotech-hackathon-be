@@ -1,6 +1,8 @@
 package com.qagenie.testbe.execution.cucumber.steps;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.qagenie.testbe.execution.cucumber.ExecutionContextHolder;
+import com.qagenie.testbe.execution.cucumber.ExecutionContextHolder.CallLog;
 import io.cucumber.java.en.Given;
 import io.cucumber.java.en.Then;
 import io.cucumber.java.en.When;
@@ -26,6 +28,7 @@ import java.util.Map;
 public class ApiSteps {
 
     private static final Logger log = LoggerFactory.getLogger(ApiSteps.class);
+    private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private final Map<String, String> headers = new LinkedHashMap<>();
     private final Map<String, String> queryParams = new LinkedHashMap<>();
@@ -85,6 +88,33 @@ public class ApiSteps {
         } catch (Exception e) {
             requestError = e;
             log.error("Cucumber step request failed for {} {}: {}", method.toUpperCase(), url, e.getMessage(), e);
+        }
+
+        recordCallLog(method, url.toString());
+    }
+
+    /** Reports the full (untruncated) request/response back to CucumberFeatureRunner via
+     * ExecutionContextHolder, one CallLog per Examples row in execution order, so
+     * ExecutionServiceImpl can persist it onto the corresponding ExecutionResult row. */
+    private void recordCallLog(String method, String url) {
+        String responseBody = response != null
+                ? response.body()
+                : (requestError != null ? "Request failed: " + requestError.getMessage() : null);
+        Integer statusCode = response != null ? response.statusCode() : null;
+        String responseHeadersJson = response != null ? toJson(response.headers().map()) : null;
+
+        ExecutionContextHolder.recordCall(new CallLog(
+                method.toUpperCase(), url, toJson(headers), requestBody,
+                statusCode, responseHeadersJson, responseBody
+        ));
+    }
+
+    private String toJson(Object value) {
+        if (value == null) return null;
+        try {
+            return MAPPER.writeValueAsString(value);
+        } catch (Exception e) {
+            return null;
         }
     }
 

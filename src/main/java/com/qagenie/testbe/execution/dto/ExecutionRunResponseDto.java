@@ -8,5 +8,6 @@ public record ExecutionRunResponseDto(
         Long id, Long applicationId, Long environmentId, String environmentName, String suiteName,
         ExecutionStatus status, Instant startedAt, Instant completedAt,
         Integer totalScenarios, Integer passedCount, Integer failedCount,
+        List<ExecutionScenarioResultDto> scenarioResults,
         List<ExecutionResultDto> results
 ) {}
