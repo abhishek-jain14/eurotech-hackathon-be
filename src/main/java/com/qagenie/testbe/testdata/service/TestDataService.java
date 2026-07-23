@@ -9,7 +9,7 @@ import java.util.List;
 
 public interface TestDataService {
     TestDataResponseDto create(TestDataRequestDto request);
-    List<TestDataResponseDto> bulkUpload(Long applicationId, MultipartFile file);
+    List<TestDataResponseDto> bulkUpload(Long applicationId, Long scenarioId, MultipartFile file);
     TestDataResponseDto update(Long id, TestDataRequestDto request);
     TestDataResponseDto getById(Long id);
     Page<TestDataResponseDto> listByApplication(Long applicationId, Pageable pageable);

@@ -26,7 +26,6 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
@@ -41,12 +40,12 @@ public class TestDataServiceImpl implements TestDataService {
     @Override
     public TestDataResponseDto create(TestDataRequestDto request) {
         Application application = findApplication(request.applicationId());
-        TestScenario testScenario= findTestScenario(request.scenarioId());
-        if (Objects.isNull(application) || Objects.isNull(testScenario)) {
-            throw new RuntimeException("applicationId or scenarioId is not valid");
-        }
+        TestScenario testScenario = findTestScenario(request.scenarioId());
+        requireScenarioBelongsToApplication(testScenario, application);
+
         TestData entity = testDataMapper.toEntity(request);
         entity.setApplication(application);
+        entity.setTestScenario(testScenario);
         if (entity.getStatus() == null) {
             entity.setStatus(TestDataStatus.VALID);
         }
@@ -54,8 +53,10 @@ public class TestDataServiceImpl implements TestDataService {
     }
 
     @Override
-    public List<TestDataResponseDto> bulkUpload(Long applicationId, MultipartFile file) {
+    public List<TestDataResponseDto> bulkUpload(Long applicationId, Long scenarioId, MultipartFile file) {
         Application application = findApplication(applicationId);
+        TestScenario testScenario = findTestScenario(scenarioId);
+        requireScenarioBelongsToApplication(testScenario, application);
         List<TestData> records = new ArrayList<>();
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8))) {
             String header = reader.readLine();
@@ -77,6 +78,7 @@ public class TestDataServiceImpl implements TestDataService {
 
                 TestData entity = new TestData();
                 entity.setApplication(application);
+                entity.setTestScenario(testScenario);
                 entity.setRecordName("record_" + String.format("%03d", rowNum++));
                 entity.setMode(TestDataMode.BULK_UPLOAD);
                 entity.setStatus(TestDataStatus.VALID);
@@ -124,7 +126,13 @@ public class TestDataServiceImpl implements TestDataService {
         return applicationRepository.findById(id).orElseThrow(() -> ResourceNotFoundException.of("Application", id));
     }
 
-    private TestScenario findTestScenario(Long id){
-        return testScenarioRepository.getReferenceById(id);
+    private TestScenario findTestScenario(Long id) {
+        return testScenarioRepository.findById(id).orElseThrow(() -> ResourceNotFoundException.of("TestScenario", id));
+    }
+
+    private void requireScenarioBelongsToApplication(TestScenario testScenario, Application application) {
+        if (!testScenario.getApplication().getId().equals(application.getId())) {
+            throw new BusinessException("Scenario does not belong to this application", "SCENARIO_APPLICATION_MISMATCH");
+        }
     }
 }

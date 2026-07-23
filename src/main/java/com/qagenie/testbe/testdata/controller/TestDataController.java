@@ -37,9 +37,9 @@ public class TestDataController {
 
     @PostMapping(value = "/application/{applicationId}/bulk-upload", consumes = "multipart/form-data")
     @PreAuthorize("hasAnyRole('ADMIN','TESTER')")
-    @Operation(summary = "Bulk upload test data via CSV")
-    public ApiResponse<List<TestDataResponseDto>> bulkUpload(@PathVariable Long applicationId, @RequestParam("file") MultipartFile file) {
-        return ApiResponse.ok("Bulk upload complete", testDataService.bulkUpload(applicationId, file));
+    @Operation(summary = "Bulk upload test data via CSV", description = "Every row in the CSV is created against the given scenario (must belong to this application).")
+    public ApiResponse<List<TestDataResponseDto>> bulkUpload(@PathVariable Long applicationId, @RequestParam Long scenarioId, @RequestParam("file") MultipartFile file) {
+        return ApiResponse.ok("Bulk upload complete", testDataService.bulkUpload(applicationId, scenarioId, file));
     }
 
     @PutMapping("/{id}")
