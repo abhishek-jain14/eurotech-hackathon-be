@@ -7,9 +7,11 @@ import com.qagenie.testbe.application.dto.*;
 import com.qagenie.testbe.application.entity.*;
 import com.qagenie.testbe.application.mapper.ApplicationMapper;
 import com.qagenie.testbe.application.repository.ApplicationRepository;
+import com.qagenie.testbe.application.repository.SpecEndpointRepository;
 import com.qagenie.testbe.application.repository.SpecVersionRepository;
 import com.qagenie.testbe.application.service.ApiSpecParser;
 import com.qagenie.testbe.application.service.ApplicationService;
+import com.qagenie.testbe.application.service.EndpointFieldExtractor;
 import com.qagenie.testbe.application.service.SpecFetchService;
 import com.qagenie.testbe.application.service.SwaggerCondenser;
 import com.qagenie.testbe.common.exception.BusinessException;
@@ -18,8 +20,11 @@ import com.qagenie.testbe.environment.entity.EnvironmentConfig;
 import com.qagenie.testbe.environment.repository.EnvironmentConfigRepository;
 import com.qagenie.testbe.project.entity.Project;
 import com.qagenie.testbe.project.repository.ProjectRepository;
+import com.qagenie.testbe.scenario.dto.ScenarioGenerationType;
+import com.qagenie.testbe.scenario.dto.ScenarioResponseDto;
 import com.qagenie.testbe.scenario.entity.TestScenario;
 import com.qagenie.testbe.scenario.repository.TestScenarioRepository;
+import com.qagenie.testbe.scenario.service.ScenarioGenerationService;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -50,9 +55,12 @@ public class ApplicationServiceImpl implements ApplicationService {
     private final ProjectRepository projectRepository;
     private final EnvironmentConfigRepository environmentConfigRepository;
     private final SpecVersionRepository specVersionRepository;
+    private final SpecEndpointRepository specEndpointRepository;
     private final TestScenarioRepository scenarioRepository;
     private final SpecFetchService specFetchService;
     private final SpecDiffService specDiffService;
+    private final ScenarioGenerationService scenarioGenerationService;
+    private final EndpointFieldExtractor endpointFieldExtractor;
 
     @Value("${qagenie.spec.swagger-suffix}")
     private String defaultSwaggerSuffix;
@@ -304,7 +312,27 @@ public class ApplicationServiceImpl implements ApplicationService {
                     nextVersionNumber, app.getId(), source);
         }
         specVersionRepository.save(version);
+        cacheEndpoints(version, content);
         return new SpecIngestResult(false, version, previousCurrentContent);
+    }
+
+    /**
+     * Parses the newly-ingested content once and persists a SPEC_ENDPOINT row per
+     * endpoint (header/path/query field metadata + request body), so fetch-endpoints
+     * and scenario generation can read from this cache instead of re-parsing the raw
+     * spec on every call. Best-effort: a parse failure here doesn't fail the upload/fetch.
+     */
+    private void cacheEndpoints(SpecVersion version, String content) {
+        try {
+            List<ApiEndpoint> endpoints = apiSpecParser.parseApiEndpoints(content);
+            List<SpecEndpoint> cached = endpoints.stream()
+                    .map(e -> endpointFieldExtractor.toCacheEntity(version, e))
+                    .toList();
+            specEndpointRepository.saveAll(cached);
+        } catch (JsonProcessingException e) {
+            log.error("Unable to cache endpoints for spec version v{} (application id={})",
+                    version.getVersionNumber(), version.getApplication().getId(), e);
+        }
     }
 
     private void applySpecVersionToApplication(Application app, SpecVersion version) {
@@ -453,14 +481,28 @@ public class ApplicationServiceImpl implements ApplicationService {
     @Override
     public List<ApiEndpoint> getApiEndpoints(Long applicationId) {
         Optional<SpecVersion> current = specVersionRepository.findByApplicationIdAndStatus(applicationId, SpecVersionStatus.CURRENT);
-        if(current.isPresent()){
-          String contentJson =  current.get().getContent();
-            try {
-                return apiSpecParser.parseApiEndpoints(contentJson);
-            } catch (JsonProcessingException e) {
-                log.error("Error while parsing API Endpoints");
-            }
+        if (current.isEmpty()) {
+            return List.of();
+        }
+
+        List<SpecEndpoint> cached = specEndpointRepository.findBySpecVersionId(current.get().getId());
+        if (!cached.isEmpty()) {
+            return cached.stream().map(endpointFieldExtractor::fromCache).toList();
+        }
+
+        // Fallback for spec versions ingested before the SPEC_ENDPOINT cache existed.
+        try {
+            return apiSpecParser.parseApiEndpoints(current.get().getContent());
+        } catch (JsonProcessingException e) {
+            log.error("Error while parsing API Endpoints");
         }
         return List.of();
+    }
+
+    @Override
+    public List<ScenarioResponseDto> generateScenarios(Long applicationId, Long specVersionId, ScenarioGenerationType type) {
+        Application app = findEntity(applicationId);
+        SpecVersion target = findVersionEntity(applicationId, specVersionId);
+        return scenarioGenerationService.generate(app, target, type);
     }
 }

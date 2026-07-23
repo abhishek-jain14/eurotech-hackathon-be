@@ -62,4 +62,19 @@ public class TestScenario extends AuditableEntity {
 
     @Column(name = "IS_ACTIVE", nullable = false)
     private boolean active = true;
+
+    /** JSON array of {fieldName, type, mandatory} - header parameters, captured at generation time. */
+    @Lob
+    @Column(name = "HEADER_JSON")
+    private String headerJson;
+
+    /** JSON array of {fieldName, type, mandatory} - path parameters, captured at generation time. */
+    @Lob
+    @Column(name = "PATH_PARAM_JSON")
+    private String pathParamJson;
+
+    /** JSON array of {fieldName, type, mandatory} - query parameters, captured at generation time. */
+    @Lob
+    @Column(name = "REQUEST_PARAM_JSON")
+    private String requestParamJson;
 }

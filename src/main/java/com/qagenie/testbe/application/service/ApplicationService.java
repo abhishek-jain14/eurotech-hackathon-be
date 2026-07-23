@@ -1,6 +1,8 @@
 package com.qagenie.testbe.application.service;
 
 import com.qagenie.testbe.application.dto.*;
+import com.qagenie.testbe.scenario.dto.ScenarioGenerationType;
+import com.qagenie.testbe.scenario.dto.ScenarioResponseDto;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.web.multipart.MultipartFile;
@@ -40,4 +42,7 @@ public interface ApplicationService {
     SpecVersionResponseDto rejectSpecVersion(Long applicationId, Long specVersionId, String reviewedBy);
 
     List<ApiEndpoint> getApiEndpoints(Long applicationId);
+
+    /** Synthesizes and persists POSITIVE/NEGATIVE scenarios for a spec version's endpoints, tagged source=AI. */
+    List<ScenarioResponseDto> generateScenarios(Long applicationId, Long specVersionId, ScenarioGenerationType type);
 }

@@ -84,10 +84,4 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(ApiResponse.error("An unexpected error occurred", "INTERNAL_ERROR"));
     }
-
-    @ExceptionHandler(NoResourceFoundException.class)
-    public ResponseEntity<Void> handleNoResourceFoundException(NoResourceFoundException ex) {
-        // Return standard 404 without logging an ERROR stack trace
-        return ResponseEntity.notFound().build();
-    }
 }

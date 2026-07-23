@@ -4,6 +4,8 @@ import com.qagenie.testbe.application.dto.*;
 import com.qagenie.testbe.application.service.ApplicationService;
 import com.qagenie.testbe.common.response.ApiResponse;
 import com.qagenie.testbe.common.response.PageResponse;
+import com.qagenie.testbe.scenario.dto.GenerateScenariosRequestDto;
+import com.qagenie.testbe.scenario.dto.ScenarioResponseDto;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -161,5 +163,16 @@ public class ApplicationController {
     public ApiResponse<List<ApiEndpoint>> fetchEndpoints(@PathVariable Long id) {
 
         return ApiResponse.ok("Apis Found", applicationService.getApiEndpoints(id));
+    }
+
+    @PostMapping("/{id}/spec-versions/{versionId}/generate-scenarios")
+    @PreAuthorize("hasAnyRole('ADMIN','TESTER')")
+    @Operation(summary = "Generate test scenarios for a spec version",
+            description = "Synthesizes POSITIVE/NEGATIVE scenarios for every endpoint in the given spec version, " +
+                    "tagged source=AI. Uses a real LLM call when qagenie.scenario-generation.use-ai=true, otherwise " +
+                    "a deterministic in-code generator (no external call, no API key needed).")
+    public ApiResponse<List<ScenarioResponseDto>> generateScenarios(@PathVariable Long id, @PathVariable Long versionId,
+                                                                     @Valid @RequestBody GenerateScenariosRequestDto request) {
+        return ApiResponse.ok("Scenarios generated", applicationService.generateScenarios(id, versionId, request.scenarioType()));
     }
 }
