@@ -138,6 +138,12 @@ public class TestDataServiceImpl implements TestDataService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public List<TestDataResponseDto> listByScenario(Long scenarioId) {
+        return testDataRepository.findByTestScenarioId(scenarioId).stream().map(testDataMapper::toResponseDto).toList();
+    }
+
+    @Override
     public void delete(Long id) {
         if (!testDataRepository.existsById(id)) {
             throw ResourceNotFoundException.of("TestData", id);

@@ -13,6 +13,7 @@ import com.qagenie.testbe.application.service.ApiSpecParser;
 import com.qagenie.testbe.application.service.ApplicationService;
 import com.qagenie.testbe.application.service.EndpointFieldExtractor;
 import com.qagenie.testbe.application.service.SpecFetchService;
+import com.qagenie.testbe.application.service.SpecHealingService;
 import com.qagenie.testbe.application.service.SwaggerCondenser;
 import com.qagenie.testbe.common.exception.BusinessException;
 import com.qagenie.testbe.common.exception.ResourceNotFoundException;
@@ -24,6 +25,7 @@ import com.qagenie.testbe.scenario.dto.ScenarioGenerationType;
 import com.qagenie.testbe.scenario.dto.ScenarioResponseDto;
 import com.qagenie.testbe.scenario.entity.TestScenario;
 import com.qagenie.testbe.scenario.repository.TestScenarioRepository;
+import com.qagenie.testbe.scenario.service.AiAgentScenarioService;
 import com.qagenie.testbe.scenario.service.ScenarioGenerationService;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
@@ -61,6 +63,8 @@ public class ApplicationServiceImpl implements ApplicationService {
     private final SpecDiffService specDiffService;
     private final ScenarioGenerationService scenarioGenerationService;
     private final EndpointFieldExtractor endpointFieldExtractor;
+    private final SpecHealingService specHealingService;
+    private final AiAgentScenarioService aiAgentScenarioService;
 
     @Value("${qagenie.spec.swagger-suffix}")
     private String defaultSwaggerSuffix;
@@ -213,20 +217,26 @@ public class ApplicationServiceImpl implements ApplicationService {
     // ------------------------------------------------------------- Spec ingestion (versioned)
 
     @Override
-    public ApplicationResponseDto uploadSpec(Long applicationId, MultipartFile file) {
+    public ApplicationResponseDto uploadSpec(Long applicationId, MultipartFile file, boolean useAiAgent) {
         Application app = findEntity(applicationId);
+        byte[] fileBytes;
         String content;
         try {
-            content = new String(file.getBytes(), StandardCharsets.UTF_8);
+            fileBytes = file.getBytes();
+            content = new String(fileBytes, StandardCharsets.UTF_8);
         } catch (Exception e) {
             throw new BusinessException("Unable to read uploaded specification file", "SPEC_READ_ERROR");
         }
-        ingestContent(app, content, file.getOriginalFilename(), SpecSource.UPLOAD);
+        SpecIngestResult ingest = ingestContent(app, content, file.getOriginalFilename(), SpecSource.UPLOAD);
+
+        if (useAiAgent && !ingest.contentUnchanged()) {
+            generateScenariosViaAiAgent(app, ingest.resultVersion(), content, fileBytes, file.getOriginalFilename());
+        }
         return toResponseDtoWithVersionInfo(app);
     }
 
     @Override
-    public SpecFetchResultDto fetchSpecFromUrl(Long applicationId) {
+    public SpecFetchResultDto fetchSpecFromUrl(Long applicationId, boolean useAiAgent) {
         Application app = findEntity(applicationId);
         String url = resolveEffectiveSpecUrl(app);
         String content = specFetchService.fetchSpecContent(url, app.getProject());
@@ -243,15 +253,49 @@ public class ApplicationServiceImpl implements ApplicationService {
             throw new BusinessException("No change in specification file.", "SPEC_UNCHANGED");
         }
 
+        String aiAgentNote = "";
+        if (useAiAgent) {
+            // The URL's own filename (e.g. "v3/api-docs") often has no yaml/json/yml extension,
+            // which the external agent requires - build a safe one from the app's known spec format
+            // instead of trusting whatever deriveFileName(url) produced.
+            aiAgentNote = generateScenariosViaAiAgent(app, ingest.resultVersion(), content,
+                    content.getBytes(StandardCharsets.UTF_8), "spec." + specFileExtension(app));
+        }
+
         if (ingest.previousCurrentContent() == null) {
             // First version ever for this application - nothing to diff against.
-            return new SpecFetchResultDto(true, "Initial swagger specification captured and set as current",
+            return new SpecFetchResultDto(true, "Initial swagger specification captured and set as current" + aiAgentNote,
                     toResponseDtoWithVersionInfo(app), toVersionDto(ingest.resultVersion()), List.of());
         }
 
         List<EndpointFieldDiffDto> endpointDiffs = specDiffService.diffFields(ingest.previousCurrentContent(), content);
-        return new SpecFetchResultDto(true, "Changes detected in the swagger specification - review the endpoint differences",
+        return new SpecFetchResultDto(true, "Changes detected in the swagger specification - review the endpoint differences" + aiAgentNote,
                 toResponseDtoWithVersionInfo(app), toVersionDto(ingest.resultVersion()), endpointDiffs);
+    }
+
+    /**
+     * Best-effort: parses the just-ingested content's endpoints, calls the external AI agent, and
+     * persists whatever scenarios it generates. Returns a short suffix describing the outcome (for
+     * callers that can surface it in a response message); never throws - a failure here shouldn't
+     * fail the spec upload/fetch that already succeeded.
+     */
+    private String generateScenariosViaAiAgent(Application app, SpecVersion version, String content, byte[] fileBytes, String fileName) {
+        try {
+            List<ApiEndpoint> endpoints = apiSpecParser.parseApiEndpoints(content);
+            List<TestScenario> generated = aiAgentScenarioService.generate(app, version, endpoints, fileBytes, fileName);
+            scenarioRepository.saveAll(generated);
+            log.info("AI agent generated {} scenarios for application id={} spec version v{}",
+                    generated.size(), app.getId(), version.getVersionNumber());
+            return " " + generated.size() + " scenario(s) generated via AI agent.";
+        } catch (Exception e) {
+            log.error("AI agent scenario generation failed for application id={} spec version v{}",
+                    app.getId(), version.getVersionNumber(), e);
+            return " AI agent scenario generation failed: " + e.getMessage();
+        }
+    }
+
+    private String specFileExtension(Application app) {
+        return app.getSpecFormat() == SpecFormat.JSON ? "json" : "yaml";
     }
 
     /** Outcome of {@link #ingestContent}: whether content changed vs. CURRENT, the relevant version row, and the previous CURRENT content (for diffing), or null if there was none yet. */
@@ -384,13 +428,19 @@ public class ApplicationServiceImpl implements ApplicationService {
     public SpecVersionImpactDto getImpact(Long applicationId, Long specVersionId) {
         List<SpecDiffEntryDto> changes = diffAgainstCurrent(applicationId, specVersionId);
 
+        SpecVersion target = findVersionEntity(applicationId, specVersionId);
+        SpecVersion current = specVersionRepository.findByApplicationIdAndStatus(applicationId, SpecVersionStatus.CURRENT)
+                .orElse(null);
+        String oldContent = current != null ? current.getContent() : "";
+        List<EndpointFieldDiffDto> fieldChanges = specDiffService.diffFields(oldContent, target.getContent());
+
         List<TestScenario> scenarios = scenarioRepository.findByApplicationId(applicationId);
         List<SpecVersionImpactDto.AffectedScenarioDto> affected = scenarios.stream()
                 .filter(s -> changes.stream().anyMatch(c -> endpointMatches(c.endpoint(), s.getHttpMethod(), s.getEndpoint())))
                 .map(s -> new SpecVersionImpactDto.AffectedScenarioDto(s.getId(), s.getName(), s.getHttpMethod() + " " + s.getEndpoint()))
                 .toList();
 
-        return new SpecVersionImpactDto(specVersionId, changes, affected.size(), affected);
+        return new SpecVersionImpactDto(specVersionId, changes, fieldChanges, affected.size(), affected);
     }
 
     private boolean endpointMatches(String diffEndpointKey, String httpMethod, String endpoint) {
@@ -400,7 +450,7 @@ public class ApplicationServiceImpl implements ApplicationService {
     }
 
     @Override
-    public ApplicationResponseDto approveSpecVersion(Long applicationId, Long specVersionId, String reviewedBy) {
+    public SpecApprovalResultDto approveSpecVersion(Long applicationId, Long specVersionId, String reviewedBy) {
         Application app = findEntity(applicationId);
         SpecVersion target = findVersionEntity(applicationId, specVersionId);
 
@@ -408,9 +458,11 @@ public class ApplicationServiceImpl implements ApplicationService {
             throw new BusinessException("Only a PENDING version can be approved (current status: " + target.getStatus() + ")", "INVALID_VERSION_STATUS");
         }
 
-        specVersionRepository.findByApplicationIdAndStatus(applicationId, SpecVersionStatus.CURRENT).ifPresent(oldCurrent -> {
-            oldCurrent.setStatus(SpecVersionStatus.SUPERSEDED);
-            specVersionRepository.save(oldCurrent);
+        Optional<SpecVersion> oldCurrent = specVersionRepository.findByApplicationIdAndStatus(applicationId, SpecVersionStatus.CURRENT);
+        String oldContent = oldCurrent.map(SpecVersion::getContent).orElse("");
+        oldCurrent.ifPresent(v -> {
+            v.setStatus(SpecVersionStatus.SUPERSEDED);
+            specVersionRepository.save(v);
         });
 
         target.setStatus(SpecVersionStatus.CURRENT);
@@ -419,10 +471,14 @@ public class ApplicationServiceImpl implements ApplicationService {
         specVersionRepository.save(target);
 
         applySpecVersionToApplication(app, target);
-        log.info("Spec version v{} approved and promoted to CURRENT for application id={} by {}",
-                target.getVersionNumber(), applicationId, reviewedBy);
 
-        return toResponseDtoWithVersionInfo(app);
+        List<EndpointFieldDiffDto> fieldChanges = specDiffService.diffFields(oldContent, target.getContent());
+        SpecHealSummaryDto healSummary = specHealingService.heal(applicationId, fieldChanges);
+
+        log.info("Spec version v{} approved and promoted to CURRENT for application id={} by {} - {} scenarios and {} test data records auto-healed",
+                target.getVersionNumber(), applicationId, reviewedBy, healSummary.scenariosUpdated(), healSummary.testDataUpdated());
+
+        return new SpecApprovalResultDto(toResponseDtoWithVersionInfo(app), healSummary);
     }
 
     @Override
@@ -500,9 +556,9 @@ public class ApplicationServiceImpl implements ApplicationService {
     }
 
     @Override
-    public List<ScenarioResponseDto> generateScenarios(Long applicationId, Long specVersionId, ScenarioGenerationType type) {
+    public List<ScenarioResponseDto> generateScenarios(Long applicationId, Long specVersionId, ScenarioGenerationType type, String prompt) {
         Application app = findEntity(applicationId);
         SpecVersion target = findVersionEntity(applicationId, specVersionId);
-        return scenarioGenerationService.generate(app, target, type);
+        return scenarioGenerationService.generate(app, target, type, prompt);
     }
 }

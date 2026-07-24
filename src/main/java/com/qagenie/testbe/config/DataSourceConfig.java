@@ -31,10 +31,13 @@ public class DataSourceConfig {
                 .build();
     }
 
+    // Despite the "oracle" naming (this bean predates the hackathon's DB target switching to
+    // MySQL), this dialect just needs to match whatever spring.datasource.url actually points
+    // at - see application-dev.properties for the real connection details.
     @Bean
     @ConditionalOnProperty(prefix = "qagenie.datasource", name = "use-oracle-db", havingValue = "true", matchIfMissing = true)
     public HibernatePropertiesCustomizer oracleHibernatePropertiesCustomizer() {
-        return properties -> properties.put("hibernate.dialect", "org.hibernate.dialect.OracleDialect");
+        return properties -> properties.put("hibernate.dialect", "org.hibernate.dialect.MySQLDialect");
     }
 
     @Bean

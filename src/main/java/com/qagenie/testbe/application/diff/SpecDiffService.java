@@ -128,8 +128,8 @@ public class SpecDiffService {
     }
 
     private EndpointFieldDiffDto endpointFieldDiff(String endpoint, String changeType, JsonNode oldNode, JsonNode newNode) {
-        Map<String, JsonNode> oldFields = oldNode != null ? extractFields(oldNode) : Map.of();
-        Map<String, JsonNode> newFields = newNode != null ? extractFields(newNode) : Map.of();
+        Map<String, ExtractedField> oldFields = oldNode != null ? extractFields(oldNode) : Map.of();
+        Map<String, ExtractedField> newFields = newNode != null ? extractFields(newNode) : Map.of();
 
         Set<String> deleted = new LinkedHashSet<>(oldFields.keySet());
         deleted.removeAll(newFields.keySet());
@@ -147,13 +147,15 @@ public class SpecDiffService {
                 if (matchedAdded.contains(addedPath) || !parent.equals(parentPath(addedPath))) {
                     continue;
                 }
-                if (schemasEquivalent(oldFields.get(deletedPath), newFields.get(addedPath))) {
+                ExtractedField oldField = oldFields.get(deletedPath);
+                ExtractedField newField = newFields.get(addedPath);
+                if (schemasEquivalent(oldField.node(), newField.node())) {
                     matchedDeleted.add(deletedPath);
                     matchedAdded.add(addedPath);
                     String oldName = leafName(deletedPath);
                     String newName = leafName(addedPath);
-                    oldSection.add(new FieldChangeDto(oldName, deletedPath, "RENAMED", newName));
-                    newSection.add(new FieldChangeDto(newName, addedPath, "RENAMED", oldName));
+                    oldSection.add(new FieldChangeDto(oldName, deletedPath, "RENAMED", newName, oldField.location(), oldField.type(), oldField.mandatory()));
+                    newSection.add(new FieldChangeDto(newName, addedPath, "RENAMED", oldName, newField.location(), newField.type(), newField.mandatory()));
                     break;
                 }
             }
@@ -161,35 +163,42 @@ public class SpecDiffService {
 
         for (String deletedPath : deleted) {
             if (!matchedDeleted.contains(deletedPath)) {
-                oldSection.add(new FieldChangeDto(leafName(deletedPath), deletedPath, "DELETED", null));
+                ExtractedField f = oldFields.get(deletedPath);
+                oldSection.add(new FieldChangeDto(leafName(deletedPath), deletedPath, "DELETED", null, f.location(), f.type(), f.mandatory()));
             }
         }
         for (String addedPath : added) {
             if (!matchedAdded.contains(addedPath)) {
-                newSection.add(new FieldChangeDto(leafName(addedPath), addedPath, "ADDED", null));
+                ExtractedField f = newFields.get(addedPath);
+                newSection.add(new FieldChangeDto(leafName(addedPath), addedPath, "ADDED", null, f.location(), f.type(), f.mandatory()));
             }
         }
 
         Set<String> common = new LinkedHashSet<>(oldFields.keySet());
         common.retainAll(newFields.keySet());
         for (String path : common) {
-            if (!schemasEquivalent(oldFields.get(path), newFields.get(path))) {
-                oldSection.add(new FieldChangeDto(leafName(path), path, "TYPE_CHANGED", null));
-                newSection.add(new FieldChangeDto(leafName(path), path, "TYPE_CHANGED", null));
+            ExtractedField oldField = oldFields.get(path);
+            ExtractedField newField = newFields.get(path);
+            if (!schemasEquivalent(oldField.node(), newField.node())) {
+                oldSection.add(new FieldChangeDto(leafName(path), path, "TYPE_CHANGED", null, oldField.location(), oldField.type(), oldField.mandatory()));
+                newSection.add(new FieldChangeDto(leafName(path), path, "TYPE_CHANGED", null, newField.location(), newField.type(), newField.mandatory()));
             }
         }
 
         return new EndpointFieldDiffDto(endpoint, changeType, oldSection, newSection);
     }
 
+    /** A field found while walking an endpoint's subtree, tagged with where it lives so healing/display can use it. */
+    private record ExtractedField(JsonNode node, String location, String type, boolean mandatory) {}
+
     /** Flattens every "properties" object and named "parameters" entry under an endpoint into dotted field paths. */
-    private Map<String, JsonNode> extractFields(JsonNode endpointNode) {
-        Map<String, JsonNode> fields = new LinkedHashMap<>();
+    private Map<String, ExtractedField> extractFields(JsonNode endpointNode) {
+        Map<String, ExtractedField> fields = new LinkedHashMap<>();
         collectFields(endpointNode, "", fields);
         return fields;
     }
 
-    private void collectFields(JsonNode node, String path, Map<String, JsonNode> out) {
+    private void collectFields(JsonNode node, String path, Map<String, ExtractedField> out) {
         if (node == null) {
             return;
         }
@@ -206,7 +215,8 @@ public class SpecDiffService {
         // e.g. {"name": "id", "in": "path", "schema": {...}} - a parameter array element
         if (node.has("name") && node.get("name").isTextual() && (node.has("in") || node.has("schema"))) {
             String fieldPath = path.isEmpty() ? node.get("name").asText() : path + "." + node.get("name").asText();
-            out.put(fieldPath, node);
+            String location = node.path("in").asText("body").toLowerCase();
+            out.put(fieldPath, new ExtractedField(node, location, fieldType(node), node.path("required").asBoolean(false)));
         }
 
         if (node.has("properties") && node.get("properties").isObject()) {
@@ -214,8 +224,9 @@ public class SpecDiffService {
             while (propEntries.hasNext()) {
                 Map.Entry<String, JsonNode> propEntry = propEntries.next();
                 String fieldPath = path.isEmpty() ? propEntry.getKey() : path + "." + propEntry.getKey();
-                out.put(fieldPath, propEntry.getValue());
-                collectFields(propEntry.getValue(), fieldPath, out);
+                JsonNode propNode = propEntry.getValue();
+                out.put(fieldPath, new ExtractedField(propNode, "body", fieldType(propNode), false));
+                collectFields(propNode, fieldPath, out);
             }
         }
 
@@ -228,6 +239,12 @@ public class SpecDiffService {
             String childPath = entry.getKey().equals("items") ? (path.isEmpty() ? "[]" : path + "[]") : path;
             collectFields(entry.getValue(), childPath, out);
         }
+    }
+
+    /** OpenAPI 3 nests the type under "schema.type" for parameters; Swagger 2.0 and plain schema properties keep it top-level. */
+    private String fieldType(JsonNode node) {
+        String type = node.path("type").asText(null);
+        return type != null ? type : node.path("schema").path("type").asText(null);
     }
 
     private String parentPath(String path) {

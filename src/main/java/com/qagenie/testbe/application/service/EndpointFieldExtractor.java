@@ -57,6 +57,17 @@ public class EndpointFieldExtractor {
         }
     }
 
+    /** Shared with RuleBasedScenarioGenerator and SpecHealingService so a healed/added field gets the same sample value a fresh generation would produce. */
+    public Object sampleValue(String type, boolean valid) {
+        String normalized = type == null ? "string" : type.toLowerCase();
+        return switch (normalized) {
+            case "integer", "int" -> valid ? 1 : "invalid_integer";
+            case "number", "float", "double" -> valid ? 1.0 : "invalid_number";
+            case "boolean" -> valid ? true : "invalid_boolean";
+            default -> valid ? "sample_value" : "";
+        };
+    }
+
     public String requestBodyToJson(Map<String, Object> requestBody) {
         if (requestBody == null || requestBody.isEmpty()) return null;
         try {

@@ -1,6 +1,6 @@
 package com.qagenie.testbe.changetracker.controller;
 
-import com.qagenie.testbe.application.dto.ApplicationResponseDto;
+import com.qagenie.testbe.application.dto.SpecApprovalResultDto;
 import com.qagenie.testbe.application.dto.SpecFetchResultDto;
 import com.qagenie.testbe.application.dto.SpecVersionImpactDto;
 import com.qagenie.testbe.application.dto.SpecVersionResponseDto;
@@ -56,7 +56,7 @@ public class ChangeTrackerController {
     @PatchMapping("/application/{applicationId}/spec-versions/{versionId}/heal")
     @PreAuthorize("hasAnyRole('ADMIN','TESTER')")
     @Operation(summary = "Approve (heal) a single pending spec version")
-    public ApiResponse<ApplicationResponseDto> heal(@PathVariable Long applicationId, @PathVariable Long versionId, Authentication auth) {
+    public ApiResponse<SpecApprovalResultDto> heal(@PathVariable Long applicationId, @PathVariable Long versionId, Authentication auth) {
         String reviewer = auth != null ? auth.getName() : "SYSTEM";
         return ApiResponse.ok("Spec version healed", changeTrackerService.heal(applicationId, versionId, reviewer));
     }

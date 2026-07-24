@@ -61,6 +61,12 @@ public class TestDataController {
         return ApiResponse.ok(PageResponse.from(testDataService.listByApplication(applicationId, pageable)));
     }
 
+    @GetMapping("/scenario/{scenarioId}")
+    @Operation(summary = "List test data records linked to a single scenario")
+    public ApiResponse<List<TestDataResponseDto>> listByScenario(@PathVariable Long scenarioId) {
+        return ApiResponse.ok(testDataService.listByScenario(scenarioId));
+    }
+
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN','TESTER')")
     @Operation(summary = "Delete a test data record")

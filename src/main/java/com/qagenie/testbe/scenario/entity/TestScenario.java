@@ -63,6 +63,14 @@ public class TestScenario extends AuditableEntity {
     @Column(name = "IS_ACTIVE", nullable = false)
     private boolean active = true;
 
+    /**
+     * Set by spec healing when a field this scenario references had a TYPE_CHANGED
+     * (not RENAMED/DELETED/ADDED - those are auto-healed in place). A value's type
+     * can't be safely auto-converted, so this flags the scenario for a human to check.
+     */
+    @Column(name = "NEEDS_REVIEW", nullable = false)
+    private boolean needsReview = false;
+
     /** JSON array of {fieldName, type, mandatory} - header parameters, captured at generation time. */
     @Lob
     @Column(name = "HEADER_JSON")

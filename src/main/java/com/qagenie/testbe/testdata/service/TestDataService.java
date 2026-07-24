@@ -13,5 +13,6 @@ public interface TestDataService {
     TestDataResponseDto update(Long id, TestDataRequestDto request);
     TestDataResponseDto getById(Long id);
     Page<TestDataResponseDto> listByApplication(Long applicationId, Pageable pageable);
+    List<TestDataResponseDto> listByScenario(Long scenarioId);
     void delete(Long id);
 }

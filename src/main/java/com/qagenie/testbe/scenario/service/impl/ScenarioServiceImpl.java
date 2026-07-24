@@ -53,6 +53,11 @@ public class ScenarioServiceImpl implements ScenarioService {
     public ScenarioResponseDto update(Long id, ScenarioRequestDto request) {
         TestScenario entity = findEntity(id);
         scenarioMapper.updateEntityFromDto(request, entity);
+        // MapStruct only auto-maps the flat fields shared by name (name/httpMethod/endpoint/scenarioType/
+        // riskLevel/active) - apiTestData has no matching entity property, so the Gherkin description
+        // must be regenerated here too, exactly like create() does, or edits to headers/params/request
+        // body/expected status/validations silently never reach the database.
+        entity.setDescription(gherkinGenerator.generateGherkin(request.apiTestData()));
         return scenarioMapper.toResponseDto(scenarioRepository.save(entity));
     }
 

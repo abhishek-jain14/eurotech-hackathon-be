@@ -1,6 +1,6 @@
 package com.qagenie.testbe.changetracker.service;
 
-import com.qagenie.testbe.application.dto.ApplicationResponseDto;
+import com.qagenie.testbe.application.dto.SpecApprovalResultDto;
 import com.qagenie.testbe.application.dto.SpecFetchResultDto;
 import com.qagenie.testbe.application.dto.SpecVersionImpactDto;
 import com.qagenie.testbe.application.dto.SpecVersionResponseDto;
@@ -17,5 +17,5 @@ public interface ChangeTrackerService {
     SpecFetchResultDto analyze(Long applicationId);
     List<SpecVersionResponseDto> listPendingVersions(Long applicationId);
     SpecVersionImpactDto getPendingImpact(Long applicationId, Long specVersionId);
-    ApplicationResponseDto heal(Long applicationId, Long specVersionId, String reviewedBy);
+    SpecApprovalResultDto heal(Long applicationId, Long specVersionId, String reviewedBy);
 }

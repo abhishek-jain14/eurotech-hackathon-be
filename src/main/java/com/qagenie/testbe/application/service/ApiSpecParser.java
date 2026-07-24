@@ -46,11 +46,7 @@ public class ApiSpecParser {
 
                         // Parse Parameters
                         if (detailsNode.has("parameters")) {
-                            List<ApiParameter> params = mapper.convertValue(
-                                    detailsNode.get("parameters"),
-                                    new TypeReference<List<ApiParameter>>() {}
-                            );
-                            endpoint.setParameters(params);
+                            endpoint.setParameters(parseParameters(detailsNode.get("parameters")));
                         }
 
                         // Parse Request Body
@@ -78,5 +74,28 @@ public class ApiSpecParser {
         }
 
         return endpointsList;
+    }
+
+    /**
+     * Builds ApiParameter from each raw parameter node instead of a blind Jackson
+     * convertValue, for two reasons: (1) OpenAPI 3 parameter objects carry extra fields
+     * ApiParameter doesn't model (schema, example, description, style...) which would
+     * otherwise fail deserialization outright, and (2) OpenAPI 3 nests the type under
+     * "schema.type" rather than the Swagger 2.0 top-level "type" - both are handled here
+     * so ApiParameter.type is populated correctly regardless of spec version.
+     */
+    private List<ApiParameter> parseParameters(JsonNode parametersNode) {
+        List<ApiParameter> params = new ArrayList<>();
+        for (JsonNode paramNode : parametersNode) {
+            ApiParameter param = new ApiParameter();
+            param.setName(paramNode.path("name").asText(null));
+            param.setIn(paramNode.path("in").asText(null));
+            param.setRequired(paramNode.path("required").asBoolean(false));
+            String type = paramNode.path("schema").path("type").asText(null);
+            if (type == null) type = paramNode.path("type").asText(null);
+            param.setType(type);
+            params.add(param);
+        }
+        return params;
     }
 }

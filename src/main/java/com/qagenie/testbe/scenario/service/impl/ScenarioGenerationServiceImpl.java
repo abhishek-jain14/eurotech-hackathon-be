@@ -52,7 +52,7 @@ public class ScenarioGenerationServiceImpl implements ScenarioGenerationService 
     private boolean useAi;
 
     @Override
-    public List<ScenarioResponseDto> generate(Application application, SpecVersion specVersion, ScenarioGenerationType type) {
+    public List<ScenarioResponseDto> generate(Application application, SpecVersion specVersion, ScenarioGenerationType type, String prompt) {
         List<ApiEndpoint> endpoints = resolveEndpoints(specVersion);
         if (endpoints.isEmpty()) {
             throw new BusinessException(
@@ -64,7 +64,7 @@ public class ScenarioGenerationServiceImpl implements ScenarioGenerationService 
         log.info("Generating {} scenarios for application id={} spec version v{} via {}",
                 type, application.getId(), specVersion.getVersionNumber(), useAi ? "AI" : "rule-based generator");
 
-        List<TestScenario> generated = generator.generate(application, specVersion, endpoints, type);
+        List<TestScenario> generated = generator.generate(application, specVersion, endpoints, type, prompt);
         List<TestScenario> saved = testScenarioRepository.saveAll(generated);
         return saved.stream().map(scenarioMapper::toResponseDto).toList();
     }

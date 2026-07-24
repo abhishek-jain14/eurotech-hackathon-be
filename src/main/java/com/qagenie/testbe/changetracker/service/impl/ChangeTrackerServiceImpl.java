@@ -1,6 +1,6 @@
 package com.qagenie.testbe.changetracker.service.impl;
 
-import com.qagenie.testbe.application.dto.ApplicationResponseDto;
+import com.qagenie.testbe.application.dto.SpecApprovalResultDto;
 import com.qagenie.testbe.application.dto.SpecFetchResultDto;
 import com.qagenie.testbe.application.dto.SpecVersionImpactDto;
 import com.qagenie.testbe.application.dto.SpecVersionResponseDto;
@@ -27,8 +27,9 @@ public class ChangeTrackerServiceImpl implements ChangeTrackerService {
     public SpecFetchResultDto analyze(Long applicationId) {
         log.info("Change analysis triggered for application id={}", applicationId);
         // fetchSpecFromUrl already does hash-guarded versioning: identical
-        // content is a no-op, new content lands PENDING automatically.
-        return applicationService.fetchSpecFromUrl(applicationId);
+        // content is a no-op, new content lands PENDING automatically. The AI agent
+        // toggle only applies to the Onboarding spec screen's fetch/upload, not here.
+        return applicationService.fetchSpecFromUrl(applicationId, false);
     }
 
     @Override
@@ -46,7 +47,7 @@ public class ChangeTrackerServiceImpl implements ChangeTrackerService {
     }
 
     @Override
-    public ApplicationResponseDto heal(Long applicationId, Long specVersionId, String reviewedBy) {
+    public SpecApprovalResultDto heal(Long applicationId, Long specVersionId, String reviewedBy) {
         return applicationService.approveSpecVersion(applicationId, specVersionId, reviewedBy);
     }
 }

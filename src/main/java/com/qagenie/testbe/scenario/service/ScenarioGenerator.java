@@ -15,5 +15,6 @@ import java.util.List;
  * selected at runtime by {@code qagenie.scenario-generation.use-ai}.
  */
 public interface ScenarioGenerator {
-    List<TestScenario> generate(Application application, SpecVersion specVersion, List<ApiEndpoint> endpoints, ScenarioGenerationType type);
+    /** prompt is free-text instructions from the user - only AiScenarioGenerator uses it, RuleBasedScenarioGenerator ignores it. */
+    List<TestScenario> generate(Application application, SpecVersion specVersion, List<ApiEndpoint> endpoints, ScenarioGenerationType type, String prompt);
 }

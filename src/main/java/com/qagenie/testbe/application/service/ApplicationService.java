@@ -17,16 +17,23 @@ public interface ApplicationService {
     void archive(Long id);
     void delete(Long id);
 
-    /** Manual file upload - versioned (hash-guarded, pending unless it's the first version). */
-    ApplicationResponseDto uploadSpec(Long applicationId, MultipartFile file);
+    /**
+     * Manual file upload - versioned (hash-guarded, pending unless it's the first version).
+     * useAiAgent=true additionally sends the raw file to the external AI agent (see
+     * AiAgentScenarioService) and persists whatever scenarios it generates, best-effort -
+     * a failure there doesn't fail the upload itself.
+     */
+    ApplicationResponseDto uploadSpec(Long applicationId, MultipartFile file, boolean useAiAgent);
 
     /**
      * Resolves the effective URL (derived or custom), fetches via the parent Project's TLS config, versions the
      * result. If the fetched content hashes the same as the current version, returns changed=false with message
      * "Swagger file is latest" and no diff. Otherwise returns changed=true with a per-endpoint, field-level
      * old/new breakdown of what was added, deleted, renamed, or changed.
+     * useAiAgent=true additionally sends the fetched content to the external AI agent and persists
+     * whatever scenarios it generates, best-effort - a failure there doesn't fail the fetch itself.
      */
-    SpecFetchResultDto fetchSpecFromUrl(Long applicationId);
+    SpecFetchResultDto fetchSpecFromUrl(Long applicationId, boolean useAiAgent);
 
     /** What URL WOULD be used right now, without fetching - for FE preview and for Change Tracker. */
     String resolveEffectiveSpecUrl(Long applicationId);
@@ -37,12 +44,12 @@ public interface ApplicationService {
 
     SpecVersionImpactDto getImpact(Long applicationId, Long specVersionId);
 
-    ApplicationResponseDto approveSpecVersion(Long applicationId, Long specVersionId, String reviewedBy);
+    SpecApprovalResultDto approveSpecVersion(Long applicationId, Long specVersionId, String reviewedBy);
 
     SpecVersionResponseDto rejectSpecVersion(Long applicationId, Long specVersionId, String reviewedBy);
 
     List<ApiEndpoint> getApiEndpoints(Long applicationId);
 
     /** Synthesizes and persists POSITIVE/NEGATIVE scenarios for a spec version's endpoints, tagged source=AI. */
-    List<ScenarioResponseDto> generateScenarios(Long applicationId, Long specVersionId, ScenarioGenerationType type);
+    List<ScenarioResponseDto> generateScenarios(Long applicationId, Long specVersionId, ScenarioGenerationType type, String prompt);
 }

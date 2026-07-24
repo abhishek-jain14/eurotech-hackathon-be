@@ -61,6 +61,13 @@
             <scope>runtime</scope>
         </dependency>
 
+        <!-- MySQL - hackathon environment's DB target (see application-dev.properties) -->
+        <dependency>
+            <groupId>com.mysql</groupId>
+            <artifactId>mysql-connector-j</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
         <!-- H2 web console (dev only) - Spring Boot 4 moved its autoconfiguration
              out of spring-boot-autoconfigure into this dedicated module. -->
         <dependency>

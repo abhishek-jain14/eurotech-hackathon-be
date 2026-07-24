@@ -100,9 +100,11 @@ public class ApplicationController {
     @PreAuthorize("hasAnyRole('ADMIN','TESTER')")
     @Operation(summary = "Manually upload/replace the spec file",
             description = "Hash-guarded: identical content is a no-op. New content becomes CURRENT immediately " +
-                    "if this is the application's first version, otherwise it's held PENDING for review.")
-    public ApiResponse<ApplicationResponseDto> uploadSpec(@PathVariable Long id, @RequestParam("file") MultipartFile file) {
-        return ApiResponse.ok("Specification uploaded", applicationService.uploadSpec(id, file));
+                    "if this is the application's first version, otherwise it's held PENDING for review. " +
+                    "useAiAgent=true additionally sends the file to the external AI agent to generate test scenarios.")
+    public ApiResponse<ApplicationResponseDto> uploadSpec(@PathVariable Long id, @RequestParam("file") MultipartFile file,
+                                                           @RequestParam(defaultValue = "false") boolean useAiAgent) {
+        return ApiResponse.ok("Specification uploaded", applicationService.uploadSpec(id, file, useAiAgent));
     }
 
     @PostMapping("/{id}/fetch-spec")
@@ -111,9 +113,11 @@ public class ApplicationController {
             description = "Uses the parent Project's keystore/truststore (or basic/bearer/api-key credential) to " +
                     "reach the endpoint. Fails with a clear TLS_REQUIRED error if the endpoint needs mutual TLS " +
                     "or a custom trust store the Project hasn't been configured with yet. Same hash-guard/pending " +
-                    "rules as manual upload apply.")
-    public ApiResponse<SpecFetchResultDto> fetchSpec(@PathVariable Long id) {
-        SpecFetchResultDto result = applicationService.fetchSpecFromUrl(id);
+                    "rules as manual upload apply. useAiAgent=true additionally sends the fetched spec to the " +
+                    "external AI agent to generate test scenarios.")
+    public ApiResponse<SpecFetchResultDto> fetchSpec(@PathVariable Long id,
+                                                      @RequestParam(defaultValue = "false") boolean useAiAgent) {
+        SpecFetchResultDto result = applicationService.fetchSpecFromUrl(id, useAiAgent);
         return ApiResponse.ok(result.message(), result);
     }
 
@@ -142,7 +146,7 @@ public class ApplicationController {
     @PreAuthorize("hasAnyRole('ADMIN','TESTER')")
     @Operation(summary = "Approve a pending spec version, promoting it to CURRENT",
             description = "The previous CURRENT version is demoted to SUPERSEDED, never deleted.")
-    public ApiResponse<ApplicationResponseDto> approve(@PathVariable Long id, @PathVariable Long versionId, Authentication auth) {
+    public ApiResponse<SpecApprovalResultDto> approve(@PathVariable Long id, @PathVariable Long versionId, Authentication auth) {
         String reviewer = auth != null ? auth.getName() : "SYSTEM";
         return ApiResponse.ok("Spec version approved", applicationService.approveSpecVersion(id, versionId, reviewer));
     }
@@ -173,6 +177,6 @@ public class ApplicationController {
                     "a deterministic in-code generator (no external call, no API key needed).")
     public ApiResponse<List<ScenarioResponseDto>> generateScenarios(@PathVariable Long id, @PathVariable Long versionId,
                                                                      @Valid @RequestBody GenerateScenariosRequestDto request) {
-        return ApiResponse.ok("Scenarios generated", applicationService.generateScenarios(id, versionId, request.scenarioType()));
+        return ApiResponse.ok("Scenarios generated", applicationService.generateScenarios(id, versionId, request.scenarioType(), request.prompt()));
     }
 }

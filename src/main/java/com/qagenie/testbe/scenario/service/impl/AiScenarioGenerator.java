@@ -57,7 +57,7 @@ public class AiScenarioGenerator implements ScenarioGenerator {
     private String baseUrl;
 
     @Override
-    public List<TestScenario> generate(Application application, SpecVersion specVersion, List<ApiEndpoint> endpoints, ScenarioGenerationType type) {
+    public List<TestScenario> generate(Application application, SpecVersion specVersion, List<ApiEndpoint> endpoints, ScenarioGenerationType type, String userPrompt) {
         if (apiKey == null || apiKey.isBlank() || model == null || model.isBlank() || baseUrl == null || baseUrl.isBlank()) {
             throw new BusinessException(
                     "AI scenario generation is enabled (qagenie.scenario-generation.use-ai=true) but is missing " +
@@ -66,7 +66,7 @@ public class AiScenarioGenerator implements ScenarioGenerator {
                     "AI_CONFIG_MISSING");
         }
 
-        String prompt = buildPrompt(application.getName(), endpoints, type);
+        String prompt = buildPrompt(application.getName(), endpoints, type, userPrompt);
         String responseText = callAiProvider(prompt);
         return parseScenarios(responseText, application, specVersion, endpoints, type);
     }
@@ -83,12 +83,15 @@ public class AiScenarioGenerator implements ScenarioGenerator {
         return (httpMethod == null ? "" : httpMethod.toUpperCase()) + "|" + (path == null ? "" : path);
     }
 
-    private String buildPrompt(String applicationName, List<ApiEndpoint> endpoints, ScenarioGenerationType type) {
+    private String buildPrompt(String applicationName, List<ApiEndpoint> endpoints, ScenarioGenerationType type, String userPrompt) {
         String wanted = switch (type) {
             case POSITIVE -> "ONLY positive (valid input, expect a 2xx response) scenarios";
             case NEGATIVE -> "ONLY negative (invalid/missing required input, expect a 4xx response) scenarios";
             case POSITIVE_NEGATIVE -> "both one positive AND one negative scenario";
         };
+        String userInstructions = (userPrompt == null || userPrompt.isBlank())
+                ? ""
+                : "\nAdditional instructions from the user - follow these when deciding what to test, without breaking the required step format below:\n" + userPrompt.trim() + "\n";
 
         StringBuilder endpointsJson = new StringBuilder("[");
         for (int i = 0; i < endpoints.size(); i++) {
@@ -106,6 +109,7 @@ public class AiScenarioGenerator implements ScenarioGenerator {
 
         return """
                 You are generating API test scenarios for the REST application "%s". For each endpoint below, generate %s.
+                %s
 
                 Endpoints (JSON array of {path, httpMethod, summary, parameters, requestBody}):
                 %s
@@ -135,7 +139,7 @@ public class AiScenarioGenerator implements ScenarioGenerator {
                   When user send <HTTP_METHOD> request to %s application, resource : <path, with any {pathParam} OpenAPI placeholders rewritten to Cucumber-style <pathParam> tokens, e.g. {id} becomes <id>>
                   Then user recieves http status code <httpStatusCode>   (literal placeholder token, NOT a concrete number)
                   And the response should match the expected result   (verbatim, no placeholder)
-                """.formatted(applicationName, wanted, endpointsJson, sanitizeTag(applicationName), applicationName);
+                """.formatted(applicationName, wanted, userInstructions, endpointsJson, sanitizeTag(applicationName), applicationName);
     }
 
     private String sanitizeTag(String value) {
