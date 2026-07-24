@@ -1,11 +1,11 @@
 INSERT INTO product (name, desc, brand, price, category, release_date, available, quantity)
-VALUES ('Tata Nexon', 'A compact SUV with excellent safety features and performance.', 'Tata Motors', 750000.00, 'Cars',
-        '2024-01-15', true, 50),
-       ('Maruti Suzuki Swift', 'A popular hatchback known for its fuel efficiency and reliability.', 'Maruti Suzuki',
-        550000.00, 'Cars', '2024-02-01', true, 100),
-       ('Hyundai Creta', 'A stylish SUV with advanced features and comfortable interior.', 'Hyundai', 950000.00, 'Cars',
-        '2024-03-01', true, 75),
-       ('Mahindra Thar', 'A rugged off-road SUV with a powerful engine and modern amenities.', 'Mahindra', 1200000.00,
-        'Cars', '2024-04-01', true, 30),
-       ('Honda City', 'A premium sedan with a sleek design and advanced safety features.', 'Honda', 1100000.00, 'Cars',
-        '2024-05-01', true, 60);
+VALUES ('Savings Advantage Account', 'High-yield savings account offering attractive interest rates and auto-sweep facilities.', 'Retail Banking', 10000.00, 'Deposit Accounts',
+        '2024-01-14', true, 500),
+       ('Platinum Rewards Credit Card', 'Premium credit card with complimentary airport lounge access and 5x reward points.', 'Cards & Payments',
+        1500.00, 'Credit Cards', '2024-01-31', true, 1000),
+       ('Home Equity Loan', 'Flexible home loan with competitive interest rates and minimal processing charges.', 'Consumer Lending', 2500000.00, 'Loans',
+        '2024-02-29', true, 250),
+       ('Tax Saver Fixed Deposit', '5-year lock-in term deposit offering tax benefits under Section 80C.', 'Wealth Management', 100000.00,
+        'Investments', '2024-03-31', true, 300),
+       ('Corporate Current Account', 'Tailored business account with zero transaction limits and dedicated relationship manager.', 'Commercial Banking', 50000.00, 'Business Accounts',
+        '2024-04-30', true, 150);

@@ -7,7 +7,7 @@ This project is built using Java and Spring Boot, and uses H2 in-memory database
 ---
 
 ## Features
-Full CRUD operations for Products
+Full CRUD operations for Products:
 
 - Create new products
 - Read all products or a product by ID
