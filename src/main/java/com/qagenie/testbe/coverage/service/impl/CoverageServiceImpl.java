@@ -29,9 +29,9 @@ import java.util.stream.Collectors;
 /**
  * Computes test coverage per application by cross-referencing its parsed endpoints
  * (SPEC_ENDPOINT cache, via ApplicationService.getApiEndpoints) against its
- * TEST_SCENARIO rows (matched by httpMethod+path), whether each scenario is used in
- * any TEST_FLOW_STEP, whether it has any linked TEST_DATA, and pass/fail counts from
- * the application's most recent EXECUTION_RUN.
+ * TEST_SCENARIO rows (matched by httpMethod+path), whether any of them is used in
+ * a TEST_FLOW_STEP, whether every one of them has linked TEST_DATA, and pass/fail
+ * counts from the application's most recent EXECUTION_RUN.
  */
 @Service
 @RequiredArgsConstructor
@@ -106,7 +106,13 @@ public class CoverageServiceImpl implements CoverageService {
             int positive = (int) matching.stream().filter(s -> s.getScenarioType() == ScenarioType.POSITIVE).count();
             int negative = (int) matching.stream().filter(s -> s.getScenarioType() == ScenarioType.NEGATIVE).count();
             boolean hasFlow = matching.stream().anyMatch(s -> flowScenarioIds.contains(s.getId()));
-            boolean hasTestData = matching.stream().anyMatch(s -> testDataScenarioIds.contains(s.getId()));
+            // "Has test data" means EVERY scenario for this endpoint has linked test data, not just
+            // some of them - a sibling scenario with data shouldn't mask another one that still needs it.
+            List<Long> missingDataScenarioIds = matching.stream()
+                    .filter(s -> !testDataScenarioIds.contains(s.getId()))
+                    .map(TestScenario::getId)
+                    .toList();
+            boolean hasTestData = !matching.isEmpty() && missingDataScenarioIds.isEmpty();
             long passed = matching.stream().mapToLong(s -> passFailByScenario.getOrDefault(s.getId(), new long[2])[0]).sum();
             long failed = matching.stream().mapToLong(s -> passFailByScenario.getOrDefault(s.getId(), new long[2])[1]).sum();
 
@@ -117,7 +123,7 @@ public class CoverageServiceImpl implements CoverageService {
             else status = "PARTIAL";
 
             rows.add(new EndpointCoverageDto(endpoint.getHttpMethod(), endpoint.getPath(), endpoint.getSummary(),
-                    positive, negative, (int) passed, (int) failed, hasFlow, hasTestData, status));
+                    positive, negative, (int) passed, (int) failed, hasFlow, hasTestData, status, missingDataScenarioIds));
         }
         return rows;
     }
@@ -129,7 +135,9 @@ public class CoverageServiceImpl implements CoverageService {
         int totalScenarios = rows.stream().mapToInt(r -> r.positiveCount() + r.negativeCount()).sum();
         int passed = rows.stream().mapToInt(EndpointCoverageDto::passedCount).sum();
         int failed = rows.stream().mapToInt(EndpointCoverageDto::failedCount).sum();
-        int gaps = (int) rows.stream().filter(r -> !"FULL".equals(r.status())).count();
+        // Gaps = endpoints with scenarios that have missing or partial test data, not every
+        // non-FULL row (a row can also be non-FULL for lacking a negative case or a flow).
+        int gaps = (int) rows.stream().filter(r -> !"NO_TESTS".equals(r.status()) && !r.hasTestData()).count();
 
         String status;
         if (total > 0 && covered == total && failed == 0) status = "GOOD";
