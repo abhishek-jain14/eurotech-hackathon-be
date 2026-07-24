@@ -2,6 +2,7 @@ package com.qagenie.testbe.execution.cucumber;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.qagenie.testbe.scenario.entity.ScenarioType;
 import com.qagenie.testbe.scenario.entity.TestScenario;
 import com.qagenie.testbe.testdata.entity.TestData;
 import org.springframework.stereotype.Component;
@@ -30,6 +31,7 @@ public class GherkinFeatureBuilder {
         }
 
         List<String> columns = resolveColumns(scenario, outline);
+        int defaultStatus = defaultStatusCode(scenario);
 
         StringBuilder feature = new StringBuilder();
         feature.append("Feature: ").append(scenario.getName()).append("\n\n");
@@ -39,11 +41,18 @@ public class GherkinFeatureBuilder {
             feature.append("\nExamples:\n");
             feature.append("  | ").append(String.join(" | ", columns)).append(" |\n");
             for (TestData row : testDataRows) {
-                feature.append("  | ").append(String.join(" | ", rowValues(row, columns))).append(" |\n");
+                feature.append("  | ").append(String.join(" | ", rowValues(row, columns, defaultStatus))).append(" |\n");
             }
         }
 
         return feature.toString();
+    }
+
+    /** Mirrors the default status a scenario used to hardcode into its Outline text before <httpStatusCode>
+     * became a per-row placeholder, so a TestData row that leaves httpStatusCode unset behaves like before. */
+    private int defaultStatusCode(TestScenario scenario) {
+        if (scenario.getScenarioType() == ScenarioType.NEGATIVE) return 400;
+        return "POST".equalsIgnoreCase(scenario.getHttpMethod()) ? 201 : 200;
     }
 
     /** Only include a column if its <name> placeholder is actually referenced in the Outline text. */
@@ -56,6 +65,11 @@ public class GherkinFeatureBuilder {
             if (outline.contains("<" + name + ">")) columns.add(name);
         }
         if (outline.contains("<requestBody>")) columns.add("requestBody");
+        if (outline.contains("<httpStatusCode>")) columns.add("httpStatusCode");
+        if (outline.contains("<errorCode>")) columns.add("errorCode");
+        if (outline.contains("<errorMsg>")) columns.add("errorMsg");
+        if (outline.contains("<responseFields>")) columns.add("responseFields");
+        if (outline.contains("<responseJson>")) columns.add("responseJson");
         return new ArrayList<>(columns);
     }
 
@@ -76,7 +90,7 @@ public class GherkinFeatureBuilder {
         return names;
     }
 
-    private List<String> rowValues(TestData row, List<String> columns) {
+    private List<String> rowValues(TestData row, List<String> columns, int defaultStatus) {
         JsonNode fields = parseFieldsJson(row.getFieldsJson());
         JsonNode headers = fields.path("headers");
         JsonNode pathParams = fields.path("pathParams");
@@ -84,17 +98,30 @@ public class GherkinFeatureBuilder {
 
         List<String> values = new ArrayList<>();
         for (String column : columns) {
-            if ("requestBody".equals(column)) {
-                values.add(compactJson(requestBody));
-            } else if (headers.has(column)) {
-                values.add(cellSafe(headers.get(column).asText()));
-            } else if (pathParams.has(column)) {
-                values.add(cellSafe(pathParams.get(column).asText()));
-            } else {
-                values.add("");
+            switch (column) {
+                case "requestBody" -> values.add(compactJson(requestBody));
+                case "httpStatusCode" -> values.add(row.getHttpStatusCode() != null
+                        ? row.getHttpStatusCode().toString() : String.valueOf(defaultStatus));
+                case "errorCode" -> values.add(cellSafe(nullToEmpty(row.getErrorCode())));
+                case "errorMsg" -> values.add(cellSafe(nullToEmpty(row.getErrorMsg())));
+                case "responseFields" -> values.add(cellSafe(nullToEmpty(row.getResponseFields())));
+                case "responseJson" -> values.add(cellSafe(nullToEmpty(row.getResponseJson())));
+                default -> {
+                    if (headers.has(column)) {
+                        values.add(cellSafe(headers.get(column).asText()));
+                    } else if (pathParams.has(column)) {
+                        values.add(cellSafe(pathParams.get(column).asText()));
+                    } else {
+                        values.add("");
+                    }
+                }
             }
         }
         return values;
+    }
+
+    private String nullToEmpty(String value) {
+        return value == null ? "" : value;
     }
 
     private JsonNode parseFieldsJson(String fieldsJson) {
@@ -112,7 +139,9 @@ public class GherkinFeatureBuilder {
     }
 
     private String cellSafe(String value) {
-        // Examples cells are pipe-delimited; a literal "|" in a value would break the table.
-        return value == null ? "" : value.replace("|", "\\|");
+        // Examples cells are pipe-delimited and single-line; a literal "|" or newline (e.g. from
+        // pretty-printed expected responseJson/responseFields) would otherwise break the table.
+        if (value == null) return "";
+        return value.replace("|", "\\|").replace("\r\n", " ").replace("\n", " ").replace("\r", " ");
     }
 }

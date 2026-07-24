@@ -43,4 +43,32 @@ public class TestData extends AuditableEntity {
     @Lob
     @Column(name = "FIELDS_JSON")
     private String fieldsJson;
+
+    @Column(name = "SERVICE_NAME", length = 150)
+    private String serviceName;
+
+    @Column(name = "END_POINT", length = 500)
+    private String endPoint;
+
+    @Column(name = "ENVIRONMENT", length = 100)
+    private String environment;
+
+    @Column(name = "HTTP_STATUS_CODE")
+    private Integer httpStatusCode;
+
+    @Column(name = "ERROR_CODE", length = 50)
+    private String errorCode;
+
+    @Column(name = "ERROR_MSG", length = 1000)
+    private String errorMsg;
+
+    /** JSON object of expected response field dot-path -> expected value, asserted best-effort at execution time. */
+    @Lob
+    @Column(name = "RESPONSE_FIELDS")
+    private String responseFields;
+
+    /** Full expected response body JSON (or fragment), asserted best-effort at execution time. */
+    @Lob
+    @Column(name = "RESPONSE_JSON")
+    private String responseJson;
 }

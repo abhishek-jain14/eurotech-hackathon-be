@@ -1,6 +1,8 @@
 package com.qagenie.testbe.execution.cucumber.steps;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.MissingNode;
 import com.qagenie.testbe.execution.cucumber.ExecutionContextHolder;
 import com.qagenie.testbe.execution.cucumber.ExecutionContextHolder.CallLog;
 import io.cucumber.java.en.Given;
@@ -16,7 +18,9 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -36,6 +40,11 @@ public class ApiSteps {
     private HttpResponse<String> response;
     private Exception requestError;
 
+    private String expectedErrorCode;
+    private String expectedErrorMessage;
+    private String expectedResponseFieldsJson;
+    private String expectedResponseJson;
+
     @Given("^set header parameter (\\S+) to (.*)$")
     public void setHeaderParameter(String name, String value) {
         headers.put(name, value);
@@ -49,6 +58,26 @@ public class ApiSteps {
     @Given("^the request body is (.*)$")
     public void setRequestBody(String body) {
         this.requestBody = body;
+    }
+
+    @Given("^the expected error code is (.*)$")
+    public void setExpectedErrorCode(String value) {
+        this.expectedErrorCode = blankToNull(value);
+    }
+
+    @Given("^the expected error message is (.*)$")
+    public void setExpectedErrorMessage(String value) {
+        this.expectedErrorMessage = blankToNull(value);
+    }
+
+    @Given("^the expected response fields are (.*)$")
+    public void setExpectedResponseFields(String value) {
+        this.expectedResponseFieldsJson = blankToNull(value);
+    }
+
+    @Given("^the expected response body is (.*)$")
+    public void setExpectedResponseBody(String value) {
+        this.expectedResponseJson = blankToNull(value);
     }
 
     @When("^user send (\\S+) request to (.+) application, resource : (.+)$")
@@ -132,6 +161,98 @@ public class ApiSteps {
                     + " - body: " + truncate(response.body()));
         }
         log.info("Assertion passed: received expected status {}", expected);
+    }
+
+    /**
+     * Best-effort expected-vs-actual assertion (same "not full semantic" philosophy as
+     * SpecDiffService) driven by whatever expected-value steps ran before this one - a no-op
+     * when a row supplies none of them, since most rows only care about the status code.
+     */
+    @Then("^the response should match the expected result$")
+    public void assertExpectedResult() {
+        if (expectedErrorCode == null && expectedErrorMessage == null
+                && expectedResponseFieldsJson == null && expectedResponseJson == null) {
+            return;
+        }
+        if (requestError != null) {
+            throw new AssertionError("Request failed: " + requestError.getMessage());
+        }
+        if (response == null) {
+            throw new AssertionError("No HTTP response captured - the request step did not run");
+        }
+
+        JsonNode actualRoot = parseJsonQuietly(response.body());
+        List<String> mismatches = new ArrayList<>();
+
+        if (expectedResponseJson != null) {
+            JsonNode expectedRoot = parseJsonQuietly(expectedResponseJson);
+            boolean matches = !expectedRoot.isMissingNode()
+                    ? expectedRoot.equals(actualRoot)
+                    : response.body() != null && response.body().trim().contains(expectedResponseJson.trim());
+            if (!matches) {
+                mismatches.add("expected response body " + truncate(expectedResponseJson) + " but got " + truncate(response.body()));
+            }
+        }
+        if (expectedResponseFieldsJson != null) {
+            JsonNode expectedFields = parseJsonQuietly(expectedResponseFieldsJson);
+            expectedFields.fields().forEachRemaining(entry -> {
+                JsonNode actualValue = findByDotPath(actualRoot, entry.getKey());
+                if (actualValue == null) return; // tolerant of missing keys - skip rather than fail
+                if (!actualValue.asText().equals(entry.getValue().asText())) {
+                    mismatches.add("field '" + entry.getKey() + "' expected '" + entry.getValue().asText()
+                            + "' but got '" + actualValue.asText() + "'");
+                }
+            });
+        }
+        if (expectedErrorCode != null) {
+            String actual = firstMatchingText(actualRoot, "code", "errorCode", "error_code");
+            if (actual == null || !actual.trim().equalsIgnoreCase(expectedErrorCode.trim())) {
+                mismatches.add("errorCode expected '" + expectedErrorCode + "' but got '" + actual + "'");
+            }
+        }
+        if (expectedErrorMessage != null) {
+            String actual = firstMatchingText(actualRoot, "message", "error", "errorMessage", "error_message");
+            if (actual == null || !actual.toLowerCase().contains(expectedErrorMessage.trim().toLowerCase())) {
+                mismatches.add("errorMsg expected to contain '" + expectedErrorMessage + "' but got '" + actual + "'");
+            }
+        }
+
+        if (!mismatches.isEmpty()) {
+            log.warn("Expected-result assertion failed: {}", mismatches);
+            throw new AssertionError(String.join("; ", mismatches) + " - body: " + truncate(response.body()));
+        }
+        log.info("Expected-result assertion passed");
+    }
+
+    private String blankToNull(String value) {
+        return (value == null || value.isBlank()) ? null : value;
+    }
+
+    private JsonNode parseJsonQuietly(String json) {
+        if (json == null || json.isBlank()) return MissingNode.getInstance();
+        try {
+            return MAPPER.readTree(json);
+        } catch (Exception e) {
+            return MissingNode.getInstance();
+        }
+    }
+
+    /** Walks a dot-separated path (e.g. "data.user.email") through nested objects; null if any segment is missing. */
+    private JsonNode findByDotPath(JsonNode root, String dotPath) {
+        JsonNode current = root;
+        for (String segment : dotPath.split("\\.")) {
+            if (current == null || current.isMissingNode()) return null;
+            current = current.path(segment);
+        }
+        return (current == null || current.isMissingNode()) ? null : current;
+    }
+
+    private String firstMatchingText(JsonNode root, String... keys) {
+        for (String key : keys) {
+            JsonNode node = root.path(key);
+            if (!node.isMissingNode() && !node.isNull()) return node.asText();
+        }
+        return null;
     }
 
     private String truncate(String body) {

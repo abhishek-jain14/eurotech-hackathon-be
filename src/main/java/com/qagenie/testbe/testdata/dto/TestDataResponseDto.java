@@ -6,5 +6,7 @@ import java.time.Instant;
 
 public record TestDataResponseDto(
         Long id, Long applicationId, Long scenarioId, String scenarioName, String recordName, TestDataMode mode,
-        TestDataStatus status, String fieldsJson, Instant createdAt, Instant updatedAt
+        TestDataStatus status, String fieldsJson, Instant createdAt, Instant updatedAt,
+        String serviceName, String endPoint, String environment, Integer httpStatusCode,
+        String errorCode, String errorMsg, String responseFields, String responseJson
 ) {}

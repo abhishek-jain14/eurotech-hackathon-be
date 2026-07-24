@@ -118,14 +118,23 @@ public class AiScenarioGenerator implements ScenarioGenerator {
                 Scenario Outline - header and path fields are <fieldName> placeholders (Test Data supplies the
                 actual value per row at execution time, so do NOT invent a sample value for them); query fields
                 get a concrete sample value directly (no Test Data source exists for query fields); do NOT emit
-                an Examples: table, it is assembled separately at execution time:
+                an Examples: table, it is assembled separately at execution time. Always include the four
+                "expected ..." lines and the final assertion line verbatim, exactly as shown below, in every
+                scenario - Test Data supplies the actual expected values per row at execution time (a blank
+                value means no assertion for that field on that row), so never substitute a sample value into
+                the <errorCode>/<errorMsg>/<responseFields>/<responseJson>/<httpStatusCode> tokens:
                 @%s @<endpointNameTag, lowercase_snake_case derived from method+path> @positive (or @negative)
                 Scenario Outline: <short description>
                   Given set header parameter <name> to <name>       (one line per header field, using the SAME <name> token as a placeholder - omit if none)
                   Given set query parameter <name> to <concrete sample value>   (one line per query parameter, omit if none)
                   And the request body is <requestBody>              (only if the endpoint has a requestBody - literal token "<requestBody>", omit otherwise)
+                  And the expected error code is <errorCode>          (literal placeholder token, do NOT invent a value)
+                  And the expected error message is <errorMsg>        (literal placeholder token, do NOT invent a value)
+                  And the expected response fields are <responseFields>  (literal placeholder token, do NOT invent a value)
+                  And the expected response body is <responseJson>    (literal placeholder token, do NOT invent a value)
                   When user send <HTTP_METHOD> request to %s application, resource : <path, with any {pathParam} OpenAPI placeholders rewritten to Cucumber-style <pathParam> tokens, e.g. {id} becomes <id>>
-                  Then user recieves http status code <200/201 for positive, 400 for negative>
+                  Then user recieves http status code <httpStatusCode>   (literal placeholder token, NOT a concrete number)
+                  And the response should match the expected result   (verbatim, no placeholder)
                 """.formatted(applicationName, wanted, endpointsJson, sanitizeTag(applicationName), applicationName);
     }
 

@@ -73,4 +73,18 @@ public class ExecutionResult {
     @Lob
     @Column(name = "RESPONSE_BODY")
     private String responseBody;
+
+    /** Expected values captured from the linked TestData row at execution time, for expected-vs-actual reporting. */
+    @Column(name = "EXPECTED_HTTP_STATUS_CODE")
+    private Integer expectedHttpStatusCode;
+
+    @Column(name = "EXPECTED_ERROR_CODE", length = 50)
+    private String expectedErrorCode;
+
+    @Column(name = "EXPECTED_ERROR_MSG", length = 1000)
+    private String expectedErrorMsg;
+
+    @Lob
+    @Column(name = "EXPECTED_RESPONSE_JSON")
+    private String expectedResponseJson;
 }

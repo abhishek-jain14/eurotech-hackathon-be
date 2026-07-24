@@ -158,6 +158,7 @@ public class ExecutionServiceImpl implements ExecutionService {
             result.setExecutionRun(run);
             result.setScenario(scenario);
             result.setTestData(testDataRows.get(i));
+            applyExpectedValues(result, testDataRows.get(i));
             result.setResultStatus(stepResult.passed() ? ResultStatus.PASS : ResultStatus.FAIL);
             result.setResponseTimeMs(stepResult.durationMs());
             result.setErrorMessage(stepResult.errorMessage());
@@ -208,6 +209,14 @@ public class ExecutionServiceImpl implements ExecutionService {
         summary.setSkippedCount(skippedCount);
         summary.setTotalResponseTimeMs(totalResponseTimeMs);
         return summary;
+    }
+
+    /** Copies the expected outcome captured on this TestData row, for expected-vs-actual reporting. */
+    private void applyExpectedValues(ExecutionResult result, TestData testData) {
+        result.setExpectedHttpStatusCode(testData.getHttpStatusCode());
+        result.setExpectedErrorCode(testData.getErrorCode());
+        result.setExpectedErrorMsg(testData.getErrorMsg());
+        result.setExpectedResponseJson(testData.getResponseJson());
     }
 
     /** Persists the full (untruncated) request/response ApiSteps captured for this row. */

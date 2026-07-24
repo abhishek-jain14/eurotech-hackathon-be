@@ -74,7 +74,6 @@ public class RuleBasedScenarioGenerator implements ScenarioGenerator {
         }
 
         boolean hasRequestBody = endpoint.getRequestBody() != null && !endpoint.getRequestBody().isEmpty();
-        int statusCode = positive ? defaultSuccessStatus(endpoint.getHttpMethod()) : 400;
         String title = (endpoint.getSummary() != null && !endpoint.getSummary().isBlank())
                 ? endpoint.getSummary()
                 : endpoint.getHttpMethod() + " " + endpoint.getPath();
@@ -90,7 +89,7 @@ public class RuleBasedScenarioGenerator implements ScenarioGenerator {
         scenario.setSource(ScenarioSource.AI);
         scenario.setRiskLevel(RiskLevel.MEDIUM);
         scenario.setActive(true);
-        scenario.setDescription(buildGherkin(application, endpoint, resolvedResource, headerFieldNames, queryParams, hasRequestBody, statusCode, description, positive));
+        scenario.setDescription(buildGherkin(application, endpoint, resolvedResource, headerFieldNames, queryParams, hasRequestBody, description, positive));
         scenario.setHeaderJson(endpointFieldExtractor.toJson(endpointFieldExtractor.fieldsIn(endpoint, "header")));
         scenario.setPathParamJson(endpointFieldExtractor.toJson(endpointFieldExtractor.fieldsIn(endpoint, "path")));
         scenario.setRequestParamJson(endpointFieldExtractor.toJson(endpointFieldExtractor.fieldsIn(endpoint, "query")));
@@ -105,15 +104,23 @@ public class RuleBasedScenarioGenerator implements ScenarioGenerator {
      *   Given set header parameter name to &lt;name&gt;         (one per header field - substituted from Test Data)
      *   Given set query parameter name to value          (one per query param - concrete sample value)
      *   And the request body is &lt;requestBody&gt;              (only when the endpoint has a request body)
+     *   And the expected error code is &lt;errorCode&gt;
+     *   And the expected error message is &lt;errorMsg&gt;
+     *   And the expected response fields are &lt;responseFields&gt;
+     *   And the expected response body is &lt;responseJson&gt;
      *   When user send HTTP_METHOD request to applicationName application, resource : resource
-     *   Then user recieves http status code statusCode
+     *   Then user recieves http status code &lt;httpStatusCode&gt;
+     *   And the response should match the expected result
      * </pre>
-     * No "Examples:" table is emitted here - it's assembled at execution time from
-     * whatever Test Data rows are linked to this scenario.
+     * &lt;httpStatusCode&gt;/&lt;errorCode&gt;/&lt;errorMsg&gt;/&lt;responseFields&gt;/&lt;responseJson&gt; are Examples
+     * placeholders substituted per row from whatever Test Data is linked to this scenario at execution
+     * time (see GherkinFeatureBuilder) - a row that leaves one unset falls back to a sensible default
+     * (e.g. 400 for negative, 200/201 for positive) or asserts nothing for that value. No "Examples:"
+     * table is emitted here - it's assembled at execution time.
      */
     private String buildGherkin(Application application, ApiEndpoint endpoint, String resolvedResource,
                                  List<String> headerFieldNames, Map<String, Object> queryParams, boolean hasRequestBody,
-                                 int statusCode, String description, boolean positive) {
+                                 String description, boolean positive) {
         String applicationName = application.getName();
         StringBuilder sb = new StringBuilder();
 
@@ -131,10 +138,15 @@ public class RuleBasedScenarioGenerator implements ScenarioGenerator {
         if (hasRequestBody) {
             sb.append("  And the request body is <requestBody>\n");
         }
+        sb.append("  And the expected error code is <errorCode>\n");
+        sb.append("  And the expected error message is <errorMsg>\n");
+        sb.append("  And the expected response fields are <responseFields>\n");
+        sb.append("  And the expected response body is <responseJson>\n");
 
         sb.append("  When user send ").append(endpoint.getHttpMethod()).append(" request to ")
                 .append(applicationName).append(" application, resource : ").append(resolvedResource).append("\n");
-        sb.append("  Then user recieves http status code ").append(statusCode).append("\n");
+        sb.append("  Then user recieves http status code <httpStatusCode>\n");
+        sb.append("  And the response should match the expected result\n");
 
         return sb.toString();
     }
@@ -143,11 +155,6 @@ public class RuleBasedScenarioGenerator implements ScenarioGenerator {
         if (value == null || value.isBlank()) return "unknown";
         String cleaned = value.trim().toLowerCase().replaceAll("[^a-z0-9]+", "_").replaceAll("^_+|_+$", "");
         return cleaned.isEmpty() ? "unknown" : cleaned;
-    }
-
-    private int defaultSuccessStatus(String httpMethod) {
-        if (httpMethod == null) return 200;
-        return "POST".equalsIgnoreCase(httpMethod) ? 201 : 200;
     }
 
     private Object sampleValue(String type, boolean valid) {
